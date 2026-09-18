@@ -1,0 +1,153 @@
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  STUDENT
+  PARENT
+  TEACHER
+  ADMIN
+}
+
+enum ServiceType {
+  CONVERSATION_PARTNER
+  PROFESSIONAL_TEACHER
+}
+
+enum AgeCategory {
+  AGE_6_11
+  AGE_12_14
+}
+
+enum LedgerTransactionType {
+  PACKAGE_PURCHASE
+  FREE_TRIAL
+  CALL_USAGE
+  ADMIN_ADJUSTMENT
+  REFUND
+}
+
+model User {
+  id           String   @id @default(cuid())
+  email        String   @unique
+  passwordHash String
+  role         Role
+  fullName     String
+  phone        String?
+  locale       String   @default("ar")
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  studentProfile StudentProfile?
+  teacherProfile TeacherProfile?
+  parentProfile  ParentProfile?
+
+  @@index([role])
+}
+
+model ParentProfile {
+  id     String @id @default(cuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  children StudentProfile[]
+}
+
+model StudentProfile {
+  id     String @id @default(cuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  parentId String?
+  parent   ParentProfile? @relation(fields: [parentId], references: [id])
+
+  dateOfBirth DateTime?
+
+  ledgerEntries    MinuteLedgerEntry[]
+  packagePurchases PackagePurchase[]
+}
+
+model TeacherProfile {
+  id     String @id @default(cuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  bio             String?
+  experienceYears Int?
+  introVideoUrl   String?
+  isOnline        Boolean @default(false)
+
+  teacherLanguages TeacherLanguage[]
+}
+
+model Language {
+  id       String  @id @default(cuid())
+  code     String  @unique
+  name     String
+  isActive Boolean @default(true)
+
+  teacherLanguages TeacherLanguage[]
+}
+
+model TeacherLanguage {
+  id          String         @id @default(cuid())
+  teacherId   String
+  teacher     TeacherProfile @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  languageId  String
+  language    Language       @relation(fields: [languageId], references: [id])
+  serviceType ServiceType
+
+  @@unique([teacherId, languageId, serviceType])
+}
+
+model PricingRule {
+  id               String   @id @default(cuid())
+  key              String   @unique
+  label            String
+  pricePerMinuteDA Int
+  isActive         Boolean  @default(true)
+  updatedAt        DateTime @updatedAt
+  updatedBy        String
+}
+
+model Package {
+  id        String   @id @default(cuid())
+  priceDA   Int
+  minutes   Int
+  isActive  Boolean  @default(true)
+  sortOrder Int      @default(0)
+  createdAt DateTime @default(now())
+
+  purchases PackagePurchase[]
+}
+
+model PackagePurchase {
+  id        String         @id @default(cuid())
+  studentId String
+  student   StudentProfile @relation(fields: [studentId], references: [id])
+  packageId String
+  package   Package        @relation(fields: [packageId], references: [id])
+  createdAt DateTime       @default(now())
+}
+
+model MinuteLedgerEntry {
+  id           String   @id @default(cuid())
+  studentId    String
+  student      StudentProfile @relation(fields: [studentId], references: [id])
+
+  type         LedgerTransactionType
+  seconds      Int
+  balanceAfter Int
+
+  referenceId  String?
+  note         String?
+  createdAt    DateTime @default(now())
+
+  @@index([studentId, createdAt])
+}
