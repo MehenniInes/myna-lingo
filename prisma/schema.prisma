@@ -31,6 +31,12 @@ enum LedgerTransactionType {
   ADMIN_ADJUSTMENT
   REFUND
 }
+enum ApplicationStatus {
+  PENDING_REVIEW
+  APPROVED
+  REJECTED
+  SUSPENDED
+}
 
 model User {
   id           String   @id @default(cuid())
@@ -78,12 +84,27 @@ model TeacherProfile {
   userId String @unique
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  bio             String?
-  experienceYears Int?
-  introVideoUrl   String?
-  isOnline        Boolean @default(false)
+  bio              String?
+  experienceYears  Int?
+  introVideoUrl    String?
+  profilePhotoUrl  String?
+  isOnline         Boolean @default(false)
+
+  applicationStatus ApplicationStatus @default(PENDING_REVIEW)
+  reviewedBy        String?
+  reviewedAt        DateTime?
+  reviewNote        String?
 
   teacherLanguages TeacherLanguage[]
+  certificates     Certificate[]
+}
+
+model Certificate {
+  id        String         @id @default(cuid())
+  teacherId String
+  teacher   TeacherProfile @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  fileUrl   String
+  uploadedAt DateTime      @default(now())
 }
 
 model Language {
