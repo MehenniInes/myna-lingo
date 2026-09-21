@@ -49,4 +49,32 @@ export class TeachersService {
 
     return teacherProfile;
   }
+
+  async listPendingApplications() {
+    return this.prisma.teacherProfile.findMany({
+      where: { applicationStatus: 'PENDING_REVIEW' },
+      include: {
+        user: { select: { email: true, fullName: true } },
+        teacherLanguages: { include: { language: true } },
+        certificates: true,
+      },
+    });
+  }
+
+  async reviewApplication(
+    teacherId: string,
+    adminUserId: string,
+    decision: 'APPROVED' | 'REJECTED',
+    note?: string,
+  ) {
+    return this.prisma.teacherProfile.update({
+      where: { id: teacherId },
+      data: {
+        applicationStatus: decision,
+        reviewedBy: adminUserId,
+        reviewedAt: new Date(),
+        reviewNote: note,
+      },
+    });
+  }
 }
