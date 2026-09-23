@@ -1,0 +1,7 @@
+allowBuilds:
+  '@prisma/engines': true
+  bcrypt: true
+  prisma: true
+
+overrides:
+  ora: 5.4.1
