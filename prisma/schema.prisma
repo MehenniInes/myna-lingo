@@ -90,6 +90,7 @@ model TeacherProfile {
   profilePhotoUrl  String?
   isOnline         Boolean @default(false)
 
+  idDocumentUrl     String?
   applicationStatus ApplicationStatus @default(PENDING_REVIEW)
   reviewedBy        String?
   reviewedAt        DateTime?
