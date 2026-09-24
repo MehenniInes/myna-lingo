@@ -21,13 +21,33 @@ export class UsersService {
 
     const passwordHash = await bcrypt.hash(data.password, 10);
 
-    const user = await this.prisma.user.create({
-      data: {
-        email: data.email,
-        passwordHash,
-        fullName: data.fullName,
-        role: data.role,
-      },
+    // نستعملو transaction باش نضمنو أن User + Profile يتخلقو بجوج ولا ما يتخلقش حتى واحد
+    const user = await this.prisma.$transaction(async (tx) => {
+      const newUser = await tx.user.create({
+        data: {
+          email: data.email,
+          passwordHash,
+          fullName: data.fullName,
+          role: data.role,
+        },
+      });
+
+      // نصنعو الـ Profile المناسب حسب الـ Role
+      if (data.role === 'STUDENT') {
+        await tx.studentProfile.create({
+          data: { userId: newUser.id },
+        });
+      } else if (data.role === 'PARENT') {
+        await tx.parentProfile.create({
+          data: { userId: newUser.id },
+        });
+      } else if (data.role === 'TEACHER') {
+        await tx.teacherProfile.create({
+          data: { userId: newUser.id },
+        });
+      }
+
+      return newUser;
     });
 
     const { passwordHash: _, ...safeUser } = user;

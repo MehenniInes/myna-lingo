@@ -55,6 +55,10 @@ model User {
   parentProfile  ParentProfile?
 
   @@index([role])
+  podcastPurchases PodcastPurchase[]
+  podcastProgress  PodcastProgress[]
+  xpTransactions XPTransaction[]
+   notifications Notification[]
 }
 
 model ParentProfile {
@@ -77,6 +81,7 @@ model StudentProfile {
 
   ledgerEntries    MinuteLedgerEntry[]
   packagePurchases PackagePurchase[]
+  groupParticipations GroupParticipant[]
 }
 
 model TeacherProfile {
@@ -97,15 +102,17 @@ model TeacherProfile {
   reviewNote        String?
 
   teacherLanguages TeacherLanguage[]
+
+  groupClasses     GroupClass[]
   certificates     Certificate[]
 }
 
 model Certificate {
-  id        String         @id @default(cuid())
-  teacherId String
-  teacher   TeacherProfile @relation(fields: [teacherId], references: [id], onDelete: Cascade)
-  fileUrl   String
-  uploadedAt DateTime      @default(now())
+  id         String         @id @default(cuid())
+  teacherId  String
+  teacher    TeacherProfile @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  fileUrl    String
+  uploadedAt DateTime       @default(now())
 }
 
 model Language {
@@ -113,8 +120,10 @@ model Language {
   code     String  @unique
   name     String
   isActive Boolean @default(true)
-
+  
   teacherLanguages TeacherLanguage[]
+  podcasts Podcast[]
+   groupClasses GroupClass[]
 }
 
 model TeacherLanguage {
@@ -173,3 +182,210 @@ model MinuteLedgerEntry {
 
   @@index([studentId, createdAt])
 }
+
+
+model Podcast {
+  id          String   @id @default(cuid())
+  title       String
+  description String
+  coverUrl    String
+  audioUrl    String
+  languageId  String
+  language    Language @relation(fields: [languageId], references: [id])
+  level       String
+  category    String
+  durationSec Int
+  priceDA     Int
+  xpReward    Int      @default(50)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  purchases   PodcastPurchase[]
+  transcripts PodcastTranscript[]
+  vocabulary  PodcastVocabulary[]
+  questions   PodcastQuestion[]
+  progress    PodcastProgress[]
+}
+
+model PodcastPurchase {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id])
+  podcastId String
+  podcast   Podcast  @relation(fields: [podcastId], references: [id])
+  priceDA   Int
+  createdAt DateTime @default(now())
+
+  @@unique([userId, podcastId])
+}
+
+model PodcastProgress {
+  id              String    @id @default(cuid())
+  userId          String
+  user            User      @relation(fields: [userId], references: [id])
+  podcastId       String
+  podcast         Podcast   @relation(fields: [podcastId], references: [id])
+  lastPositionSec Int       @default(0)
+  completed       Boolean   @default(false)
+  completedAt     DateTime?
+  updatedAt       DateTime  @updatedAt
+
+  @@unique([userId, podcastId])
+}
+
+model PodcastTranscript {
+  id        String  @id @default(cuid())
+  podcastId String
+  podcast   Podcast @relation(fields: [podcastId], references: [id], onDelete: Cascade)
+  startSec  Int
+  endSec    Int
+  text      String
+  order     Int
+}
+
+model PodcastVocabulary {
+  id            String  @id @default(cuid())
+  podcastId     String
+  podcast       Podcast @relation(fields: [podcastId], references: [id], onDelete: Cascade)
+  word          String
+  meaning       String
+  translation   String
+  example       String
+  pronunciation String?
+}
+
+model PodcastQuestion {
+  id         String  @id @default(cuid())
+  podcastId  String
+  podcast    Podcast @relation(fields: [podcastId], references: [id], onDelete: Cascade)
+  question   String
+  options    String[]
+  correctIdx Int
+  order      Int
+}
+// ========== XP & LEVELS ==========
+enum XPSource {
+  PODCAST_COMPLETION
+  ACTIVITY_COMPLETION
+  LESSON_COMPLETION
+  ADMIN_ADJUSTMENT
+  DAILY_STREAK
+}
+
+model XPTransaction {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  amount      Int
+  source      XPSource
+  referenceId String?
+  note        String?
+  createdAt   DateTime @default(now())
+
+  @@index([userId, createdAt])
+}
+
+model Level {
+  id       String  @id @default(cuid())
+  number   Int     @unique
+  name     String
+  minXP    Int
+  maxXP    Int
+  badgeUrl String?
+}
+// ========== LEARNING ACTIVITIES ==========
+enum ActivityType {
+  ICEBREAKER
+  VISUAL_EXPRESSION
+  DEBATE
+  SHADOWING
+  PERSONAL_TOPIC
+  SHORT_STORY
+  VOCABULARY_CHALLENGE
+}
+
+model LearningActivity {
+  id          String       @id @default(cuid())
+  type        ActivityType
+  title       String
+  description String?
+  content     Json         
+  xpReward    Int          @default(20)
+  isActive    Boolean      @default(true)
+  createdAt   DateTime     @default(now())
+  updatedAt   DateTime     @updatedAt
+
+  questions   ActivityQuestion[]
+}
+
+model ActivityQuestion {
+  id         String           @id @default(cuid())
+  activityId String
+  activity   LearningActivity @relation(fields: [activityId], references: [id], onDelete: Cascade)
+  question   String
+  options    String[] 
+  answer     String?         
+  order      Int
+}
+// ========== GROUP CLASSES ==========
+model GroupClass {
+  id          String      @id @default(cuid())
+  title       String
+  description String?
+  languageId  String
+  language    Language    @relation(fields: [languageId], references: [id])
+  teacherId   String
+  teacher     TeacherProfile @relation(fields: [teacherId], references: [id])
+  ageCategory AgeCategory  // ← هنا كنستعملو الـ Enum اللي كان معرّف من قبل
+  capacity    Int         @default(6)
+  priceDA     Int         // السعر للطفل الواحد
+  startTime   DateTime
+  endTime     DateTime
+  isActive    Boolean     @default(true)
+  createdAt   DateTime    @default(now())
+
+  participants GroupParticipant[]
+}
+
+model GroupParticipant {
+  id           String       @id @default(cuid())
+  groupClassId String
+  groupClass   GroupClass   @relation(fields: [groupClassId], references: [id], onDelete: Cascade)
+  studentId    String
+  student      StudentProfile @relation(fields: [studentId], references: [id])
+  joinedAt     DateTime     @default(now())
+
+  @@unique([groupClassId, studentId])
+}
+// ========== NOTIFICATIONS ==========
+enum NotificationType {
+  PAYMENT_SUCCESS
+  MINUTES_ADDED
+  BOOKING_CONFIRMED
+  BOOKING_CANCELLED
+  CHILD_BOOKING
+  CHILD_LESSON_COMPLETED
+  CHILD_PROGRESS
+  ANNOUNCEMENT
+  PODCAST_PURCHASED
+  XP_EARNED
+  ADMIN_MESSAGE
+}
+
+model Notification {
+  id        String           @id @default(cuid())
+  userId    String
+  user      User             @relation(fields: [userId], references: [id], onDelete: Cascade)
+  type      NotificationType
+  title     String
+  message   String
+  data      Json?            
+  isRead    Boolean          @default(false)
+  readAt    DateTime?
+  createdAt DateTime         @default(now())
+
+  @@index([userId, isRead])
+  @@index([userId, createdAt])
+}
+
