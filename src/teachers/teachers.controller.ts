@@ -8,6 +8,7 @@ import { ApplyDto } from './dto/apply.dto.js';
 import { ReviewDto } from './dto/review.dto.js';
 import { Roles } from '../auth/roles.decorator.js';
 import { RolesGuard } from '../auth/roles.guard.js';
+import { AboutDto } from './dto/about.dto.js';
 
 @Controller('teachers')
 export class TeachersController {
@@ -82,5 +83,18 @@ export class TeachersController {
   )
     uploadIdDocument(@UploadedFile() file: Express.Multer.File) {
     return { url: `${process.env.BACKEND_URL || 'http://localhost:4000'}/uploads/id-documents/${file.filename}` };
+  }
+    @Get('draft')
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @Roles('TEACHER')
+  async getDraft(@Req() req: any) {
+    return this.teachersService.getOrCreateDraft(req.user.userId);
+  }
+
+  @Patch('draft/about')
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @Roles('TEACHER')
+  async updateAbout(@Req() req: any, @Body() dto: AboutDto) {
+    return this.teachersService.updateAbout(req.user.userId, dto);
   }
 }

@@ -15,7 +15,7 @@ export class TeachersService {
       throw new ConflictException('Application already submitted or already approved');
     }
 
-        const teacherProfile = await this.prisma.teacherProfile.upsert({
+    const teacherProfile = await this.prisma.teacherProfile.upsert({
       where: { userId },
       create: {
         userId,
@@ -46,7 +46,7 @@ export class TeachersService {
         reviewedAt: null,
         reviewNote: null,
       },
-      include: { teacherLanguages: true },
+      include: { teacherLanguages: { include: { certificates: true } } },
     });
 
     return teacherProfile;
@@ -55,9 +55,9 @@ export class TeachersService {
   async listPendingApplications() {
     return this.prisma.teacherProfile.findMany({
       where: { applicationStatus: 'PENDING_REVIEW' },
-            include: {
+      include: {
         user: { select: { email: true, fullName: true } },
-        teacherLanguages: { include: { language: true } },
+        teacherLanguages: { include: { language: true, certificates: true } },
       },
     });
   }
@@ -76,6 +76,46 @@ export class TeachersService {
         reviewedAt: new Date(),
         reviewNote: note,
       },
+    });
+  }
+
+  async getOrCreateDraft(userId: string) {
+    let profile = await this.prisma.teacherProfile.findUnique({
+      where: { userId },
+      include: {
+        spokenLanguages: { include: { language: true } },
+        teacherLanguages: { include: { language: true, certificates: true } },
+        educations: true,
+      },
+    });
+
+    if (!profile) {
+      profile = await this.prisma.teacherProfile.create({
+        data: { userId, applicationStatus: 'DRAFT' },
+        include: {
+          spokenLanguages: { include: { language: true } },
+          teacherLanguages: { include: { language: true, certificates: true } },
+          educations: true,
+        },
+      });
+    }
+
+    return profile;
+  }
+
+  async updateAbout(
+    userId: string,
+    data: {
+      firstName: string;
+      lastName: string;
+      countryOfBirth: string;
+      phoneNumber?: string;
+      confirmedOver18: boolean;
+    },
+  ) {
+    return this.prisma.teacherProfile.update({
+      where: { userId },
+      data,
     });
   }
 }

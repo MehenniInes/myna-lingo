@@ -32,10 +32,20 @@ enum LedgerTransactionType {
   REFUND
 }
 enum ApplicationStatus {
+  DRAFT
   PENDING_REVIEW
   APPROVED
   REJECTED
   SUSPENDED
+}
+enum ProficiencyLevel {
+  A1
+  A2
+  B1
+  B2
+  C1
+  C2
+  NATIVE
 }
 
 model User {
@@ -89,6 +99,12 @@ model TeacherProfile {
   userId String @unique
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
+  firstName        String?
+  lastName         String?
+  countryOfBirth   String?
+  phoneNumber      String?
+  confirmedOver18  Boolean @default(false)
+  profileTitle     String?
   bio              String?
   experienceYears  Int?
   introVideoUrl    String?
@@ -96,15 +112,40 @@ model TeacherProfile {
   isOnline         Boolean @default(false)
 
   idDocumentUrl     String?
-  applicationStatus ApplicationStatus @default(PENDING_REVIEW)
+  applicationStatus ApplicationStatus @default(DRAFT)
   reviewedBy        String?
   reviewedAt        DateTime?
   reviewNote        String?
 
-  teacherLanguages TeacherLanguage[]
+  teacherLanguages  TeacherLanguage[]
+  spokenLanguages   SpokenLanguage[]
+  educations        Education[]
 
-  groupClasses     GroupClass[]
-  
+  groupClasses      GroupClass[]
+}
+
+model SpokenLanguage {
+  id         String           @id @default(cuid())
+  teacherId  String
+  teacher    TeacherProfile   @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  languageId String
+  language   Language         @relation(fields: [languageId], references: [id])
+  level      ProficiencyLevel
+
+  @@unique([teacherId, languageId])
+}
+
+model Education {
+  id             String   @id @default(cuid())
+  teacherId      String
+  teacher        TeacherProfile @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  university     String
+  degree         String
+  degreeType     String?
+  specialization String?
+  yearFrom       Int
+  yearTo         Int
+  diplomaUrl     String?
 }
 
 model Certificate {
@@ -122,8 +163,9 @@ model Language {
   isActive Boolean @default(true)
   
   teacherLanguages TeacherLanguage[]
+  spokenLanguages  SpokenLanguage[]
   podcasts Podcast[]
-   groupClasses GroupClass[]
+  groupClasses GroupClass[]
 }
 
 model TeacherLanguage {
