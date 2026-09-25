@@ -12,6 +12,7 @@ import { XpModule } from './xp/xp.module.js';
 import { ActivitiesModule } from './activities/activities.module.js';
 import { ChildrenModule } from './children/children.module.js';
 import { NotificationsModule } from './notifications/notifications.module.js';
+import { LanguagesModule } from './languages/languages.module.js';
 
 @Module({
   imports: [
@@ -26,6 +27,7 @@ import { NotificationsModule } from './notifications/notifications.module.js';
     ActivitiesModule,
     ChildrenModule,
     NotificationsModule,
+    LanguagesModule,
   ],
   controllers: [AppController],
   providers: [AppService],

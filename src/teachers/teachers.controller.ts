@@ -55,8 +55,8 @@ export class TeachersController {
       },
     }),
   )
-  uploadCertificate(@UploadedFile() file: Express.Multer.File) {
-    return { url: `/uploads/certificates/${file.filename}` };
+    uploadCertificate(@UploadedFile() file: Express.Multer.File) {
+    return { url: `${process.env.BACKEND_URL || 'http://localhost:4000'}/uploads/certificates/${file.filename}` };
   }
 
   @Post('upload/id-document')
@@ -80,7 +80,7 @@ export class TeachersController {
       },
     }),
   )
-  uploadIdDocument(@UploadedFile() file: Express.Multer.File) {
-    return { url: `/uploads/id-documents/${file.filename}` };
+    uploadIdDocument(@UploadedFile() file: Express.Multer.File) {
+    return { url: `${process.env.BACKEND_URL || 'http://localhost:4000'}/uploads/id-documents/${file.filename}` };
   }
 }
