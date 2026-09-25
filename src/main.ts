@@ -12,7 +12,7 @@ async function bootstrap() {
     origin: 'http://localhost:3000',
   });
   app.useGlobalPipes(new ValidationPipe({ whitelist: true, forbidNonWhitelisted: true }));
-  const port = Number(process.env.PORT) || 3001;
+  const port = Number(process.env.PORT) || 4000;
 await app.listen(port);
 console.log(`🚀 Backend running on http://localhost:${port}`);
 }

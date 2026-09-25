@@ -15,7 +15,7 @@ export class TeachersService {
       throw new ConflictException('Application already submitted or already approved');
     }
 
-    const teacherProfile = await this.prisma.teacherProfile.upsert({
+        const teacherProfile = await this.prisma.teacherProfile.upsert({
       where: { userId },
       create: {
         userId,
@@ -23,15 +23,16 @@ export class TeachersService {
         experienceYears: dto.experienceYears,
         introVideoUrl: dto.introVideoUrl,
         profilePhotoUrl: dto.profilePhotoUrl,
+        idDocumentUrl: dto.idDocumentUrl,
         applicationStatus: 'PENDING_REVIEW',
         teacherLanguages: {
           create: dto.languages.map((l) => ({
             languageId: l.languageId,
             serviceType: l.serviceType,
+            certificates: {
+              create: l.certificateUrls.map((url) => ({ fileUrl: url })),
+            },
           })),
-        },
-        certificates: {
-          create: dto.certificateUrls.map((url) => ({ fileUrl: url })),
         },
       },
       update: {
@@ -39,12 +40,13 @@ export class TeachersService {
         experienceYears: dto.experienceYears,
         introVideoUrl: dto.introVideoUrl,
         profilePhotoUrl: dto.profilePhotoUrl,
+        idDocumentUrl: dto.idDocumentUrl,
         applicationStatus: 'PENDING_REVIEW',
         reviewedBy: null,
         reviewedAt: null,
         reviewNote: null,
       },
-      include: { teacherLanguages: true, certificates: true },
+      include: { teacherLanguages: true },
     });
 
     return teacherProfile;
@@ -53,10 +55,9 @@ export class TeachersService {
   async listPendingApplications() {
     return this.prisma.teacherProfile.findMany({
       where: { applicationStatus: 'PENDING_REVIEW' },
-      include: {
+            include: {
         user: { select: { email: true, fullName: true } },
         teacherLanguages: { include: { language: true } },
-        certificates: true,
       },
     });
   }
