@@ -51,6 +51,28 @@ export class TeachersService {
 
     return teacherProfile;
   }
+    async updateSpokenLanguages(
+    userId: string,
+    languages: { languageId: string; level: string }[],
+  ) {
+    const profile = await this.prisma.teacherProfile.findUnique({ where: { userId } });
+    if (!profile) throw new Error('Profile not found');
+
+    await this.prisma.spokenLanguage.deleteMany({ where: { teacherId: profile.id } });
+
+    await this.prisma.spokenLanguage.createMany({
+      data: languages.map((l) => ({
+        teacherId: profile.id,
+        languageId: l.languageId,
+        level: l.level as any,
+      })),
+    });
+
+    return this.prisma.teacherProfile.findUnique({
+      where: { userId },
+      include: { spokenLanguages: { include: { language: true } } },
+    });
+  }
 
   async listPendingApplications() {
     return this.prisma.teacherProfile.findMany({

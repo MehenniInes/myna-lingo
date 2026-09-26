@@ -9,6 +9,7 @@ import { ReviewDto } from './dto/review.dto.js';
 import { Roles } from '../auth/roles.decorator.js';
 import { RolesGuard } from '../auth/roles.guard.js';
 import { AboutDto } from './dto/about.dto.js';
+import { SpokenLanguagesDto } from './dto/spoken-languages.dto.js';
 
 @Controller('teachers')
 export class TeachersController {
@@ -96,5 +97,11 @@ export class TeachersController {
   @Roles('TEACHER')
   async updateAbout(@Req() req: any, @Body() dto: AboutDto) {
     return this.teachersService.updateAbout(req.user.userId, dto);
+  }
+    @Patch('draft/spoken-languages')
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @Roles('TEACHER')
+  async updateSpokenLanguages(@Req() req: any, @Body() dto: SpokenLanguagesDto) {
+    return this.teachersService.updateSpokenLanguages(req.user.userId, dto.languages);
   }
 }
