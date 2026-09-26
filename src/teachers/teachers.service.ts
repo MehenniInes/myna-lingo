@@ -73,6 +73,12 @@ export class TeachersService {
       include: { spokenLanguages: { include: { language: true } } },
     });
   }
+    async updateProfilePhoto(userId: string, profilePhotoUrl: string) {
+    return this.prisma.teacherProfile.update({
+      where: { userId },
+      data: { profilePhotoUrl },
+    });
+  }
 
   async listPendingApplications() {
     return this.prisma.teacherProfile.findMany({

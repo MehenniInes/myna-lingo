@@ -10,6 +10,7 @@ import { Roles } from '../auth/roles.decorator.js';
 import { RolesGuard } from '../auth/roles.guard.js';
 import { AboutDto } from './dto/about.dto.js';
 import { SpokenLanguagesDto } from './dto/spoken-languages.dto.js';
+import { ProfilePhotoDto } from './dto/profile-photo.dto.js';
 
 @Controller('teachers')
 export class TeachersController {
@@ -103,5 +104,35 @@ export class TeachersController {
   @Roles('TEACHER')
   async updateSpokenLanguages(@Req() req: any, @Body() dto: SpokenLanguagesDto) {
     return this.teachersService.updateSpokenLanguages(req.user.userId, dto.languages);
+  }
+    @Post('upload/profile-photo')
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @Roles('TEACHER')
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: diskStorage({
+        destination: './uploads/profile-photos',
+        filename: (req, file, cb) => {
+          const unique = Date.now() + '-' + Math.round(Math.random() * 1e9);
+          cb(null, unique + extname(file.originalname));
+        },
+      }),
+      limits: { fileSize: 20 * 1024 * 1024 },
+      fileFilter: (req, file, cb) => {
+        if (!['image/jpeg', 'image/png'].includes(file.mimetype)) {
+          return cb(new BadRequestException('Only JPEG or PNG images are allowed'), false);
+        }
+        cb(null, true);
+      },
+    }),
+  )
+  uploadProfilePhoto(@UploadedFile() file: Express.Multer.File) {
+    return { url: `${process.env.BACKEND_URL || 'http://localhost:4000'}/uploads/profile-photos/${file.filename}` };
+  }
+    @Patch('draft/profile-photo')
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @Roles('TEACHER')
+  async updateProfilePhoto(@Req() req: any, @Body() dto: ProfilePhotoDto) {
+    return this.teachersService.updateProfilePhoto(req.user.userId, dto.profilePhotoUrl);
   }
 }
