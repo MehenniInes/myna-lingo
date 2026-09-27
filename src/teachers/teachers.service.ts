@@ -146,4 +146,46 @@ export class TeachersService {
       data,
     });
   }
+    async addCertificate(userId: string, dto: {
+    teacherLanguageId: string;
+    subject?: string;
+    description?: string;
+    issuedBy?: string;
+    yearsOfStudy?: number;
+    fileUrl: string;
+  }) {
+    const teacherLanguage = await this.prisma.teacherLanguage.findUnique({
+      where: { id: dto.teacherLanguageId },
+      include: { teacher: true },
+    });
+    if (!teacherLanguage || teacherLanguage.teacher.userId !== userId) {
+      throw new Error('Invalid teacher language reference');
+    }
+
+    return this.prisma.certificate.create({ data: dto });
+  }
+    async updateTeachingLanguages(
+    userId: string,
+    languages: { languageId: string; serviceType: string }[],
+  ) {
+    const profile = await this.prisma.teacherProfile.findUnique({ where: { userId } });
+    if (!profile) throw new Error('Profile not found');
+
+    await this.prisma.teacherLanguage.deleteMany({ where: { teacherId: profile.id } });
+
+    for (const l of languages) {
+      await this.prisma.teacherLanguage.create({
+        data: {
+          teacherId: profile.id,
+          languageId: l.languageId,
+          serviceType: l.serviceType as any,
+        },
+      });
+    }
+
+    return this.prisma.teacherProfile.findUnique({
+      where: { userId },
+      include: { teacherLanguages: { include: { language: true, certificates: true } } },
+    });
+  }
 }

@@ -11,6 +11,8 @@ import { RolesGuard } from '../auth/roles.guard.js';
 import { AboutDto } from './dto/about.dto.js';
 import { SpokenLanguagesDto } from './dto/spoken-languages.dto.js';
 import { ProfilePhotoDto } from './dto/profile-photo.dto.js';
+import { CertificateDto } from './dto/certificate.dto.js';
+import { TeachingLanguagesDto } from './dto/teaching-languages.dto.js';
 
 @Controller('teachers')
 export class TeachersController {
@@ -134,5 +136,17 @@ export class TeachersController {
   @Roles('TEACHER')
   async updateProfilePhoto(@Req() req: any, @Body() dto: ProfilePhotoDto) {
     return this.teachersService.updateProfilePhoto(req.user.userId, dto.profilePhotoUrl);
+  }
+    @Post('draft/certificate')
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @Roles('TEACHER')
+  async addCertificate(@Req() req: any, @Body() dto: CertificateDto) {
+    return this.teachersService.addCertificate(req.user.userId, dto);
+  }
+    @Patch('draft/teaching-languages')
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @Roles('TEACHER')
+  async updateTeachingLanguages(@Req() req: any, @Body() dto: TeachingLanguagesDto) {
+    return this.teachersService.updateTeachingLanguages(req.user.userId, dto.languages);
   }
 }
