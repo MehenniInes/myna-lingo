@@ -188,4 +188,12 @@ export class TeachersService {
       include: { teacherLanguages: { include: { language: true, certificates: true } } },
     });
   }
+    async becomeTeacher(userId: string) {
+    const existing = await this.prisma.teacherProfile.findUnique({ where: { userId } });
+    if (existing) return existing;
+
+    return this.prisma.teacherProfile.create({
+      data: { userId, applicationStatus: 'DRAFT' },
+    });
+  }
 }
