@@ -150,4 +150,17 @@ export class PackagesService {
 
     return result;
   }
+    async getMyPurchases(userId: string) {
+    const student = await this.prisma.studentProfile.findUnique({
+      where: { userId },
+    });
+    if (!student) return [];
+    return this.prisma.packagePurchase.findMany({
+      where: { studentId: student.id },
+      include: {
+        package: { select: { id: true, minutes: true, priceDA: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
 }

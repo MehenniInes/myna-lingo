@@ -196,4 +196,13 @@ export class TeachersService {
       data: { userId, applicationStatus: 'DRAFT' },
     });
   }
+    async getOnlineTeachers() {
+    return this.prisma.teacherProfile.findMany({
+      where: { isOnline: true, applicationStatus: 'APPROVED' },
+      include: {
+        user: { select: { fullName: true } },
+        teacherLanguages: { include: { language: true } },
+      },
+    });
+  }
 }

@@ -11,6 +11,12 @@ export class PackagesController {
     return this.packagesService.findAll();
   }
 
+  @UseGuards(AuthGuard('jwt'))
+  @Get('my-purchases')
+  getMyPurchases(@Req() req: any) {
+    return this.packagesService.getMyPurchases(req.user.userId);
+  }
+
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.packagesService.findOne(id);

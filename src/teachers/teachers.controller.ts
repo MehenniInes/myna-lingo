@@ -164,4 +164,8 @@ export class TeachersController {
   async becomeTeacher(@Req() req: any) {
     return this.teachersService.becomeTeacher(req.user.userId);
   }
+    @Get('online')
+  getOnlineTeachers() {
+    return this.teachersService.getOnlineTeachers();
+  }
 }

@@ -77,6 +77,35 @@ export class PodcastsService {
     });
   }
 
+  async getMyVocabulary(userId: string) {
+    const purchases = await this.prisma.podcastPurchase.findMany({
+      where: { userId },
+      select: { podcastId: true },
+    });
+
+    const podcastIds = purchases.map((p) => p.podcastId);
+
+    return this.prisma.podcastVocabulary.findMany({
+      where: { podcastId: { in: podcastIds } },
+      include: {
+        podcast: {
+          select: { id: true, title: true, coverUrl: true },
+        },
+      },
+      orderBy: { word: 'asc' },
+    });
+  }
+
+  async getMyPodcastPurchases(userId: string) {
+    return this.prisma.podcastPurchase.findMany({
+      where: { userId },
+      include: {
+        podcast: { select: { id: true, title: true, coverUrl: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
   async saveProgress(userId: string, podcastId: string, lastPositionSec: number) {
     const podcast = await this.prisma.podcast.findUnique({
       where: { id: podcastId },
