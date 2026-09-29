@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsInt, IsArray, ValidateNested, IsIn, IsUrl } from 'class-validator';
+import { IsString, IsOptional, IsInt, IsArray, ValidateNested, IsIn, IsUrl, ArrayMinSize } from 'class-validator';
 import { Type } from 'class-transformer';
 
 class LanguageEntryDto {
@@ -7,6 +7,11 @@ class LanguageEntryDto {
 
   @IsIn(['CONVERSATION_PARTNER', 'PROFESSIONAL_TEACHER'])
   serviceType: 'CONVERSATION_PARTNER' | 'PROFESSIONAL_TEACHER';
+
+   @IsArray()
+  @ArrayMinSize(1)
+  @IsString({ each: true })
+  certificateUrls: string[];
 }
 
 export class ApplyDto {
@@ -24,12 +29,11 @@ export class ApplyDto {
   @IsUrl()
   profilePhotoUrl?: string;
 
-  @IsArray()
-  @ValidateNested({ each: true })
-  @Type(() => LanguageEntryDto)
-  languages: LanguageEntryDto[];
+  @IsString()
+  idDocumentUrl: string;
 
   @IsArray()
-  @IsUrl({}, { each: true })
-  certificateUrls: string[];
-}
+  @ArrayMinSize(1)
+  @ValidateNested({ each: true })
+  @Type(() => LanguageEntryDto)
+  languages: LanguageEntryDto[];}

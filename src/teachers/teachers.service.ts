@@ -23,15 +23,16 @@ export class TeachersService {
         experienceYears: dto.experienceYears,
         introVideoUrl: dto.introVideoUrl,
         profilePhotoUrl: dto.profilePhotoUrl,
+        idDocumentUrl: dto.idDocumentUrl,
         applicationStatus: 'PENDING_REVIEW',
         teacherLanguages: {
           create: dto.languages.map((l) => ({
             languageId: l.languageId,
             serviceType: l.serviceType,
+            certificates: {
+              create: l.certificateUrls.map((url) => ({ fileUrl: url })),
+            },
           })),
-        },
-        certificates: {
-          create: dto.certificateUrls.map((url) => ({ fileUrl: url })),
         },
       },
       update: {
@@ -39,15 +40,44 @@ export class TeachersService {
         experienceYears: dto.experienceYears,
         introVideoUrl: dto.introVideoUrl,
         profilePhotoUrl: dto.profilePhotoUrl,
+        idDocumentUrl: dto.idDocumentUrl,
         applicationStatus: 'PENDING_REVIEW',
         reviewedBy: null,
         reviewedAt: null,
         reviewNote: null,
       },
-      include: { teacherLanguages: true, certificates: true },
+      include: { teacherLanguages: { include: { certificates: true } } },
     });
 
     return teacherProfile;
+  }
+    async updateSpokenLanguages(
+    userId: string,
+    languages: { languageId: string; level: string }[],
+  ) {
+    const profile = await this.prisma.teacherProfile.findUnique({ where: { userId } });
+    if (!profile) throw new Error('Profile not found');
+
+    await this.prisma.spokenLanguage.deleteMany({ where: { teacherId: profile.id } });
+
+    await this.prisma.spokenLanguage.createMany({
+      data: languages.map((l) => ({
+        teacherId: profile.id,
+        languageId: l.languageId,
+        level: l.level as any,
+      })),
+    });
+
+    return this.prisma.teacherProfile.findUnique({
+      where: { userId },
+      include: { spokenLanguages: { include: { language: true } } },
+    });
+  }
+    async updateProfilePhoto(userId: string, profilePhotoUrl: string) {
+    return this.prisma.teacherProfile.update({
+      where: { userId },
+      data: { profilePhotoUrl },
+    });
   }
 
   async listPendingApplications() {
@@ -55,8 +85,7 @@ export class TeachersService {
       where: { applicationStatus: 'PENDING_REVIEW' },
       include: {
         user: { select: { email: true, fullName: true } },
-        teacherLanguages: { include: { language: true } },
-        certificates: true,
+        teacherLanguages: { include: { language: true, certificates: true } },
       },
     });
   }
@@ -75,6 +104,96 @@ export class TeachersService {
         reviewedAt: new Date(),
         reviewNote: note,
       },
+    });
+  }
+
+  async getOrCreateDraft(userId: string) {
+    let profile = await this.prisma.teacherProfile.findUnique({
+      where: { userId },
+      include: {
+        spokenLanguages: { include: { language: true } },
+        teacherLanguages: { include: { language: true, certificates: true } },
+        educations: true,
+      },
+    });
+
+    if (!profile) {
+      profile = await this.prisma.teacherProfile.create({
+        data: { userId, applicationStatus: 'DRAFT' },
+        include: {
+          spokenLanguages: { include: { language: true } },
+          teacherLanguages: { include: { language: true, certificates: true } },
+          educations: true,
+        },
+      });
+    }
+
+    return profile;
+  }
+
+  async updateAbout(
+    userId: string,
+    data: {
+      firstName: string;
+      lastName: string;
+      countryOfBirth: string;
+      phoneNumber?: string;
+      confirmedOver18: boolean;
+    },
+  ) {
+    return this.prisma.teacherProfile.update({
+      where: { userId },
+      data,
+    });
+  }
+    async addCertificate(userId: string, dto: {
+    teacherLanguageId: string;
+    subject?: string;
+    description?: string;
+    issuedBy?: string;
+    yearsOfStudy?: number;
+    fileUrl: string;
+  }) {
+    const teacherLanguage = await this.prisma.teacherLanguage.findUnique({
+      where: { id: dto.teacherLanguageId },
+      include: { teacher: true },
+    });
+    if (!teacherLanguage || teacherLanguage.teacher.userId !== userId) {
+      throw new Error('Invalid teacher language reference');
+    }
+
+    return this.prisma.certificate.create({ data: dto });
+  }
+    async updateTeachingLanguages(
+    userId: string,
+    languages: { languageId: string; serviceType: string }[],
+  ) {
+    const profile = await this.prisma.teacherProfile.findUnique({ where: { userId } });
+    if (!profile) throw new Error('Profile not found');
+
+    await this.prisma.teacherLanguage.deleteMany({ where: { teacherId: profile.id } });
+
+    for (const l of languages) {
+      await this.prisma.teacherLanguage.create({
+        data: {
+          teacherId: profile.id,
+          languageId: l.languageId,
+          serviceType: l.serviceType as any,
+        },
+      });
+    }
+
+    return this.prisma.teacherProfile.findUnique({
+      where: { userId },
+      include: { teacherLanguages: { include: { language: true, certificates: true } } },
+    });
+  }
+    async becomeTeacher(userId: string) {
+    const existing = await this.prisma.teacherProfile.findUnique({ where: { userId } });
+    if (existing) return existing;
+
+    return this.prisma.teacherProfile.create({
+      data: { userId, applicationStatus: 'DRAFT' },
     });
   }
 }

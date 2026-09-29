@@ -12,7 +12,6 @@ import { XpModule } from './xp/xp.module.js';
 import { ActivitiesModule } from './activities/activities.module.js';
 import { ChildrenModule } from './children/children.module.js';
 import { NotificationsModule } from './notifications/notifications.module.js';
-import { GroupClassesModule } from './group-classes/group-classes.module.js';
 
 @Module({
   imports: [
@@ -27,7 +26,6 @@ import { GroupClassesModule } from './group-classes/group-classes.module.js';
     ActivitiesModule,
     ChildrenModule,
     NotificationsModule,
-    GroupClassesModule,
   ],
   controllers: [AppController],
   providers: [AppService],
