@@ -1,12 +1,14 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { XpService } from '../xp/xp.service.js';
+import { NotificationsService } from '../notifications/notifications.service.js';
 
 @Injectable()
 export class ActivitiesService {
   constructor(
     private prisma: PrismaService,
     private xpService: XpService,
+    private notifications: NotificationsService,
   ) {}
 
   async findAll(type?: string) {
@@ -30,7 +32,7 @@ export class ActivitiesService {
     return activity;
   }
 
-  async complete(userId: string, activityId: string) {
+   async complete(userId: string, activityId: string) {
     const activity = await this.prisma.learningActivity.findUnique({
       where: { id: activityId },
     });
@@ -38,13 +40,21 @@ export class ActivitiesService {
       throw new NotFoundException('Activity not found or inactive');
     }
 
-    // نمنحو XP
     const xp = await this.xpService.award(
       userId,
       activity.xpReward,
       'ACTIVITY_COMPLETION',
       `Completed activity: ${activity.title}`,
       activityId,
+    );
+
+    // ✅ نصنعو إشعار
+    await this.notifications.create(
+      userId,
+      'XP_EARNED',
+      'XP Earned! ⭐',
+      `You earned ${activity.xpReward} XP for completing "${activity.title}".`,
+      { activityId, xpAwarded: activity.xpReward },
     );
 
     return {

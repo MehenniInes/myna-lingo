@@ -3,9 +3,10 @@ import { ActivitiesService } from './activities.service.js';
 import { ActivitiesController } from './activities.controller.js';
 import { PrismaModule } from '../prisma/prisma.module.js';
 import { XpModule } from '../xp/xp.module.js';
+import { NotificationsModule } from '../notifications/notifications.module.js';
 
 @Module({
-  imports: [PrismaModule, XpModule],
+  imports: [PrismaModule, XpModule, NotificationsModule],
   controllers: [ActivitiesController],
   providers: [ActivitiesService],
 })
