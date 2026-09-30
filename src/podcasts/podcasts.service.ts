@@ -1,9 +1,12 @@
 import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
-
+import { NotificationsService } from '../notifications/notifications.service.js';
 @Injectable()
 export class PodcastsService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private notifications: NotificationsService,
+  ) {}
 
   async findAll() {
     return this.prisma.podcast.findMany({
@@ -27,7 +30,7 @@ export class PodcastsService {
     return podcast;
   }
 
-  async purchase(userId: string, podcastId: string) {
+    async purchase(userId: string, podcastId: string) {
     const podcast = await this.prisma.podcast.findUnique({
       where: { id: podcastId },
     });
@@ -35,7 +38,6 @@ export class PodcastsService {
       throw new NotFoundException('Podcast not found or inactive');
     }
 
-    // نتأكدو واش شراه من قبل
     const existing = await this.prisma.podcastPurchase.findUnique({
       where: {
         userId_podcastId: { userId, podcastId },
@@ -45,13 +47,24 @@ export class PodcastsService {
       throw new BadRequestException('Podcast already purchased');
     }
 
-    return this.prisma.podcastPurchase.create({
+    const purchase = await this.prisma.podcastPurchase.create({
       data: {
         userId,
         podcastId,
         priceDA: podcast.priceDA,
       },
     });
+
+    // ✅ نصنعو إشعار
+    await this.notifications.create(
+      userId,
+      'PODCAST_PURCHASED',
+      'Podcast Purchased! 🎧',
+      `You can now listen to "${podcast.title}".`,
+      { podcastId, title: podcast.title },
+    );
+
+    return purchase;
   }
 
   async getMyPodcasts(userId: string) {
@@ -59,6 +72,35 @@ export class PodcastsService {
       where: { userId },
       include: {
         podcast: { include: { language: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
+
+  async getMyVocabulary(userId: string) {
+    const purchases = await this.prisma.podcastPurchase.findMany({
+      where: { userId },
+      select: { podcastId: true },
+    });
+
+    const podcastIds = purchases.map((p) => p.podcastId);
+
+    return this.prisma.podcastVocabulary.findMany({
+      where: { podcastId: { in: podcastIds } },
+      include: {
+        podcast: {
+          select: { id: true, title: true, coverUrl: true },
+        },
+      },
+      orderBy: { word: 'asc' },
+    });
+  }
+
+  async getMyPodcastPurchases(userId: string) {
+    return this.prisma.podcastPurchase.findMany({
+      where: { userId },
+      include: {
+        podcast: { select: { id: true, title: true, coverUrl: true } },
       },
       orderBy: { createdAt: 'desc' },
     });

@@ -51,7 +51,8 @@ export class TeachersService {
 
     return teacherProfile;
   }
-    async updateSpokenLanguages(
+
+  async updateSpokenLanguages(
     userId: string,
     languages: { languageId: string; level: string }[],
   ) {
@@ -73,7 +74,8 @@ export class TeachersService {
       include: { spokenLanguages: { include: { language: true } } },
     });
   }
-    async updateProfilePhoto(userId: string, profilePhotoUrl: string) {
+
+  async updateProfilePhoto(userId: string, profilePhotoUrl: string) {
     return this.prisma.teacherProfile.update({
       where: { userId },
       data: { profilePhotoUrl },
@@ -146,6 +148,7 @@ export class TeachersService {
       data,
     });
   }
+
   async addCertificate(userId: string, dto: {
     teacherLanguageId: string;
     description?: string;
@@ -193,7 +196,8 @@ export class TeachersService {
       include: { teacherLanguages: { include: { language: true, certificates: true } } },
     });
   }
-    async becomeTeacher(userId: string) {
+
+  async becomeTeacher(userId: string) {
     const existing = await this.prisma.teacherProfile.findUnique({ where: { userId } });
     if (existing) return existing;
 
@@ -201,7 +205,8 @@ export class TeachersService {
       data: { userId, applicationStatus: 'DRAFT' },
     });
   }
-    async submitApplication(userId: string) {
+
+  async submitApplication(userId: string) {
     const profile = await this.prisma.teacherProfile.findUnique({
       where: { userId },
       include: { teacherLanguages: { include: { certificates: true } } },
@@ -226,10 +231,21 @@ export class TeachersService {
       data: { applicationStatus: 'PENDING_REVIEW' },
     });
   }
-    async updateIdDocument(userId: string, idDocumentUrl: string) {
+
+  async updateIdDocument(userId: string, idDocumentUrl: string) {
     return this.prisma.teacherProfile.update({
       where: { userId },
       data: { idDocumentUrl },
+    });
+  }
+
+  async getOnlineTeachers() {
+    return this.prisma.teacherProfile.findMany({
+      where: { isOnline: true, applicationStatus: 'APPROVED' },
+      include: {
+        user: { select: { fullName: true } },
+        teacherLanguages: { include: { language: true } },
+      },
     });
   }
 }

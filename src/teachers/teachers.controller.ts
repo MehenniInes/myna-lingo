@@ -21,31 +21,27 @@ export class TeachersController {
   constructor(private teachersService: TeachersService) {}
 
   @Post('apply')
-    @UseGuards(AuthGuard('jwt'), HasTeacherProfileGuard)
-  
-  
+  @UseGuards(AuthGuard('jwt'), HasTeacherProfileGuard)
   async apply(@Req() req: any, @Body() dto: ApplyDto) {
     return this.teachersService.apply(req.user.userId, dto);
   }
 
   @Get('applications/pending')
-    @UseGuards(AuthGuard('jwt'), HasTeacherProfileGuard)
+  @UseGuards(AuthGuard('jwt'), HasTeacherProfileGuard)
   @Roles('ADMIN')
   async listPending() {
     return this.teachersService.listPendingApplications();
   }
 
   @Patch('applications/:id/review')
-    @UseGuards(AuthGuard('jwt'), HasTeacherProfileGuard)
+  @UseGuards(AuthGuard('jwt'), HasTeacherProfileGuard)
   @Roles('ADMIN')
   async review(@Req() req: any, @Param('id') id: string, @Body() dto: ReviewDto) {
     return this.teachersService.reviewApplication(id, req.user.userId, dto.decision, dto.note);
   }
 
   @Post('upload/certificate')
-    @UseGuards(AuthGuard('jwt'), HasTeacherProfileGuard)
-  
-  
+  @UseGuards(AuthGuard('jwt'), HasTeacherProfileGuard)
   @UseInterceptors(
     FileInterceptor('file', {
       storage: diskStorage({
@@ -64,14 +60,12 @@ export class TeachersController {
       },
     }),
   )
-    uploadCertificate(@UploadedFile() file: Express.Multer.File) {
+  uploadCertificate(@UploadedFile() file: Express.Multer.File) {
     return { url: `${process.env.BACKEND_URL || 'http://localhost:4000'}/uploads/certificates/${file.filename}` };
   }
 
   @Post('upload/id-document')
-    @UseGuards(AuthGuard('jwt'), HasTeacherProfileGuard)
-  
-  
+  @UseGuards(AuthGuard('jwt'), HasTeacherProfileGuard)
   @UseInterceptors(
     FileInterceptor('file', {
       storage: diskStorage({
@@ -90,34 +84,30 @@ export class TeachersController {
       },
     }),
   )
-    uploadIdDocument(@UploadedFile() file: Express.Multer.File) {
+  uploadIdDocument(@UploadedFile() file: Express.Multer.File) {
     return { url: `${process.env.BACKEND_URL || 'http://localhost:4000'}/uploads/id-documents/${file.filename}` };
   }
-    @Get('draft')
-  @UseGuards(AuthGuard('jwt'), HasTeacherProfileGuard)
 
+  @Get('draft')
+  @UseGuards(AuthGuard('jwt'), HasTeacherProfileGuard)
   async getDraft(@Req() req: any) {
     return this.teachersService.getOrCreateDraft(req.user.userId);
   }
 
   @Patch('draft/about')
-    @UseGuards(AuthGuard('jwt'), HasTeacherProfileGuard)
-  
-  
+  @UseGuards(AuthGuard('jwt'), HasTeacherProfileGuard)
   async updateAbout(@Req() req: any, @Body() dto: AboutDto) {
     return this.teachersService.updateAbout(req.user.userId, dto);
   }
-    @Patch('draft/spoken-languages')
-    @UseGuards(AuthGuard('jwt'), HasTeacherProfileGuard)
-  
-  
+
+  @Patch('draft/spoken-languages')
+  @UseGuards(AuthGuard('jwt'), HasTeacherProfileGuard)
   async updateSpokenLanguages(@Req() req: any, @Body() dto: SpokenLanguagesDto) {
     return this.teachersService.updateSpokenLanguages(req.user.userId, dto.languages);
   }
-    @Post('upload/profile-photo')
-    @UseGuards(AuthGuard('jwt'), HasTeacherProfileGuard)
-  
-  
+
+  @Post('upload/profile-photo')
+  @UseGuards(AuthGuard('jwt'), HasTeacherProfileGuard)
   @UseInterceptors(
     FileInterceptor('file', {
       storage: diskStorage({
@@ -139,40 +129,45 @@ export class TeachersController {
   uploadProfilePhoto(@UploadedFile() file: Express.Multer.File) {
     return { url: `${process.env.BACKEND_URL || 'http://localhost:4000'}/uploads/profile-photos/${file.filename}` };
   }
-    @Patch('draft/profile-photo')
-    @UseGuards(AuthGuard('jwt'), HasTeacherProfileGuard)
-  
-  
+
+  @Patch('draft/profile-photo')
+  @UseGuards(AuthGuard('jwt'), HasTeacherProfileGuard)
   async updateProfilePhoto(@Req() req: any, @Body() dto: ProfilePhotoDto) {
     return this.teachersService.updateProfilePhoto(req.user.userId, dto.profilePhotoUrl);
   }
-    @Post('draft/certificate')
-    @UseGuards(AuthGuard('jwt'), HasTeacherProfileGuard)
-  
-  
+
+  @Post('draft/certificate')
+  @UseGuards(AuthGuard('jwt'), HasTeacherProfileGuard)
   async addCertificate(@Req() req: any, @Body() dto: CertificateDto) {
     return this.teachersService.addCertificate(req.user.userId, dto);
   }
-    @Patch('draft/teaching-languages')
-    @UseGuards(AuthGuard('jwt'), HasTeacherProfileGuard)
-  
-  
+
+  @Patch('draft/teaching-languages')
+  @UseGuards(AuthGuard('jwt'), HasTeacherProfileGuard)
   async updateTeachingLanguages(@Req() req: any, @Body() dto: TeachingLanguagesDto) {
     return this.teachersService.updateTeachingLanguages(req.user.userId, dto.languages);
   }
-    @Post('become')
+
+  @Post('become')
   @UseGuards(AuthGuard('jwt'))
   async becomeTeacher(@Req() req: any) {
     return this.teachersService.becomeTeacher(req.user.userId);
   }
-    @Post('draft/submit')
+
+  @Post('draft/submit')
   @UseGuards(AuthGuard('jwt'), HasTeacherProfileGuard)
   async submitApplication(@Req() req: any) {
     return this.teachersService.submitApplication(req.user.userId);
   }
-    @Patch('draft/id-document')
+
+  @Patch('draft/id-document')
   @UseGuards(AuthGuard('jwt'), HasTeacherProfileGuard)
   async updateIdDocument(@Req() req: any, @Body() dto: IdDocumentDto) {
     return this.teachersService.updateIdDocument(req.user.userId, dto.idDocumentUrl);
+  }
+
+  @Get('online')
+  getOnlineTeachers() {
+    return this.teachersService.getOnlineTeachers();
   }
 }

@@ -12,7 +12,10 @@ import { XpModule } from './xp/xp.module.js';
 import { ActivitiesModule } from './activities/activities.module.js';
 import { ChildrenModule } from './children/children.module.js';
 import { NotificationsModule } from './notifications/notifications.module.js';
-import { LanguagesModule } from './languages/languages.module.js';
+import { GroupClassesModule } from './group-classes/group-classes.module.js';
+import { AdminModule } from './admin/admin.module.js';
+import { CallsModule } from './calls/calls.module.js';
+import { BookingsModule } from './bookings/bookings.module.js';
 
 @Module({
   imports: [
@@ -27,7 +30,10 @@ import { LanguagesModule } from './languages/languages.module.js';
     ActivitiesModule,
     ChildrenModule,
     NotificationsModule,
-    LanguagesModule,
+    GroupClassesModule,
+    AdminModule,
+    CallsModule,
+    BookingsModule,
   ],
   controllers: [AppController],
   providers: [AppService],

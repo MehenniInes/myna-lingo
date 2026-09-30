@@ -7,11 +7,18 @@ datasource db {
   provider = "postgresql"
 }
 
+// ========== ENUMS ==========
 enum Role {
   STUDENT
   PARENT
   TEACHER
   ADMIN
+}
+enum BookingStatus {
+  PENDING
+  CONFIRMED
+  COMPLETED
+  CANCELLED
 }
 
 enum ServiceType {
@@ -31,6 +38,7 @@ enum LedgerTransactionType {
   ADMIN_ADJUSTMENT
   REFUND
 }
+
 enum ApplicationStatus {
   DRAFT
   PENDING_REVIEW
@@ -38,6 +46,7 @@ enum ApplicationStatus {
   REJECTED
   SUSPENDED
 }
+
 enum ProficiencyLevel {
   A1
   A2
@@ -48,6 +57,39 @@ enum ProficiencyLevel {
   NATIVE
 }
 
+enum XPSource {
+  PODCAST_COMPLETION
+  ACTIVITY_COMPLETION
+  LESSON_COMPLETION
+  ADMIN_ADJUSTMENT
+  DAILY_STREAK
+}
+
+enum ActivityType {
+  ICEBREAKER
+  VISUAL_EXPRESSION
+  DEBATE
+  SHADOWING
+  PERSONAL_TOPIC
+  SHORT_STORY
+  VOCABULARY_CHALLENGE
+}
+
+enum NotificationType {
+  PAYMENT_SUCCESS
+  MINUTES_ADDED
+  BOOKING_CONFIRMED
+  BOOKING_CANCELLED
+  CHILD_BOOKING
+  CHILD_LESSON_COMPLETED
+  CHILD_PROGRESS
+  ANNOUNCEMENT
+  PODCAST_PURCHASED
+  XP_EARNED
+  ADMIN_MESSAGE
+}
+
+// ========== USERS ==========
 model User {
   id           String   @id @default(cuid())
   email        String   @unique
@@ -64,11 +106,12 @@ model User {
   teacherProfile TeacherProfile?
   parentProfile  ParentProfile?
 
-  @@index([role])
   podcastPurchases PodcastPurchase[]
   podcastProgress  PodcastProgress[]
-  xpTransactions XPTransaction[]
-   notifications Notification[]
+  xpTransactions   XPTransaction[]
+  notifications    Notification[]
+
+  @@index([role])
 }
 
 model ParentProfile {
@@ -89,27 +132,30 @@ model StudentProfile {
 
   dateOfBirth DateTime?
 
-  ledgerEntries    MinuteLedgerEntry[]
-  packagePurchases PackagePurchase[]
+  ledgerEntries       MinuteLedgerEntry[]
+  packagePurchases    PackagePurchase[]
   groupParticipations GroupParticipant[]
+  calls Call[]
+  bookings Booking[]
 }
 
+// ========== TEACHER ==========
 model TeacherProfile {
   id     String @id @default(cuid())
   userId String @unique
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  firstName        String?
-  lastName         String?
-  countryOfBirth   String?
-  phoneNumber      String?
-  confirmedOver18  Boolean @default(false)
-  profileTitle     String?
-  bio              String?
-  experienceYears  Int?
-  introVideoUrl    String?
-  profilePhotoUrl  String?
-  isOnline         Boolean @default(false)
+  firstName       String?
+  lastName        String?
+  countryOfBirth  String?
+  phoneNumber     String?
+  confirmedOver18 Boolean @default(false)
+  profileTitle    String?
+  bio             String?
+  experienceYears Int?
+  introVideoUrl   String?
+  profilePhotoUrl String?
+  isOnline        Boolean @default(false)
 
   idDocumentUrl     String?
   applicationStatus ApplicationStatus @default(DRAFT)
@@ -117,35 +163,34 @@ model TeacherProfile {
   reviewedAt        DateTime?
   reviewNote        String?
 
-  teacherLanguages  TeacherLanguage[]
-  spokenLanguages   SpokenLanguage[]
-  educations        Education[]
-
-  groupClasses      GroupClass[]
+  teacherLanguages TeacherLanguage[]
+  spokenLanguages  SpokenLanguage[]
+  educations       Education[]
+  groupClasses     GroupClass[]
+  calls              Call[]
+  teachingTimeLedger TeachingTimeLedger[]
+  bookings Booking[]
 }
 
 model SpokenLanguage {
-  id         String           @id @default(cuid())
+  id         String         @id @default(cuid())
   teacherId  String
-  teacher    TeacherProfile   @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  teacher    TeacherProfile @relation(fields: [teacherId], references: [id], onDelete: Cascade)
   languageId String
-  language   Language         @relation(fields: [languageId], references: [id])
-  level      ProficiencyLevel
-
-  @@unique([teacherId, languageId])
+  language   Language       @relation(fields: [languageId], references: [id])
+  level      String
 }
 
 model Education {
-  id             String   @id @default(cuid())
-  teacherId      String
-  teacher        TeacherProfile @relation(fields: [teacherId], references: [id], onDelete: Cascade)
-  university     String
-  degree         String
-  degreeType     String?
-  specialization String?
-  yearFrom       Int
-  yearTo         Int
-  diplomaUrl     String?
+  id           String         @id @default(cuid())
+  teacherId    String
+  teacher      TeacherProfile @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  institution  String?
+  degree       String?
+  fieldOfStudy String?
+  startYear    Int?
+  endYear      Int?
+  description  String?
 }
 
 model Certificate {
@@ -160,16 +205,17 @@ model Certificate {
   uploadedAt        DateTime        @default(now())
 }
 
+// ========== LANGUAGE ==========
 model Language {
   id       String  @id @default(cuid())
   code     String  @unique
   name     String
   isActive Boolean @default(true)
-  
+
   teacherLanguages TeacherLanguage[]
   spokenLanguages  SpokenLanguage[]
-  podcasts Podcast[]
-  groupClasses GroupClass[]
+  podcasts         Podcast[]
+  groupClasses     GroupClass[]
 }
 
 model TeacherLanguage {
@@ -185,6 +231,7 @@ model TeacherLanguage {
   @@unique([teacherId, languageId, serviceType])
 }
 
+// ========== PRICING & PACKAGES ==========
 model PricingRule {
   id               String   @id @default(cuid())
   key              String   @unique
@@ -216,22 +263,22 @@ model PackagePurchase {
 }
 
 model MinuteLedgerEntry {
-  id           String   @id @default(cuid())
-  studentId    String
-  student      StudentProfile @relation(fields: [studentId], references: [id])
+  id        String         @id @default(cuid())
+  studentId String
+  student   StudentProfile @relation(fields: [studentId], references: [id])
 
   type         LedgerTransactionType
   seconds      Int
   balanceAfter Int
 
-  referenceId  String?
-  note         String?
-  createdAt    DateTime @default(now())
+  referenceId String?
+  note        String?
+  createdAt   DateTime @default(now())
 
   @@index([studentId, createdAt])
 }
 
-
+// ========== PODCASTS ==========
 model Podcast {
   id          String   @id @default(cuid())
   title       String
@@ -312,15 +359,8 @@ model PodcastQuestion {
   correctIdx Int
   order      Int
 }
-// ========== XP & LEVELS ==========
-enum XPSource {
-  PODCAST_COMPLETION
-  ACTIVITY_COMPLETION
-  LESSON_COMPLETION
-  ADMIN_ADJUSTMENT
-  DAILY_STREAK
-}
 
+// ========== XP & LEVELS ==========
 model XPTransaction {
   id          String   @id @default(cuid())
   userId      String
@@ -342,29 +382,20 @@ model Level {
   maxXP    Int
   badgeUrl String?
 }
-// ========== LEARNING ACTIVITIES ==========
-enum ActivityType {
-  ICEBREAKER
-  VISUAL_EXPRESSION
-  DEBATE
-  SHADOWING
-  PERSONAL_TOPIC
-  SHORT_STORY
-  VOCABULARY_CHALLENGE
-}
 
+// ========== ACTIVITIES ==========
 model LearningActivity {
   id          String       @id @default(cuid())
   type        ActivityType
   title       String
   description String?
-  content     Json         
+  content     Json
   xpReward    Int          @default(20)
   isActive    Boolean      @default(true)
   createdAt   DateTime     @default(now())
   updatedAt   DateTime     @updatedAt
 
-  questions   ActivityQuestion[]
+  questions ActivityQuestion[]
 }
 
 model ActivityQuestion {
@@ -372,55 +403,43 @@ model ActivityQuestion {
   activityId String
   activity   LearningActivity @relation(fields: [activityId], references: [id], onDelete: Cascade)
   question   String
-  options    String[] 
-  answer     String?         
+  options    String[]
+  answer     String?
   order      Int
 }
+
 // ========== GROUP CLASSES ==========
 model GroupClass {
-  id          String      @id @default(cuid())
+  id          String         @id @default(cuid())
   title       String
   description String?
   languageId  String
-  language    Language    @relation(fields: [languageId], references: [id])
+  language    Language       @relation(fields: [languageId], references: [id])
   teacherId   String
   teacher     TeacherProfile @relation(fields: [teacherId], references: [id])
-  ageCategory AgeCategory  // ← هنا كنستعملو الـ Enum اللي كان معرّف من قبل
-  capacity    Int         @default(6)
-  priceDA     Int         // السعر للطفل الواحد
+  ageCategory AgeCategory
+  capacity    Int            @default(6)
+  priceDA     Int
   startTime   DateTime
   endTime     DateTime
-  isActive    Boolean     @default(true)
-  createdAt   DateTime    @default(now())
+  isActive    Boolean        @default(true)
+  createdAt   DateTime       @default(now())
 
   participants GroupParticipant[]
 }
 
 model GroupParticipant {
-  id           String       @id @default(cuid())
+  id           String         @id @default(cuid())
   groupClassId String
-  groupClass   GroupClass   @relation(fields: [groupClassId], references: [id], onDelete: Cascade)
+  groupClass   GroupClass     @relation(fields: [groupClassId], references: [id], onDelete: Cascade)
   studentId    String
   student      StudentProfile @relation(fields: [studentId], references: [id])
-  joinedAt     DateTime     @default(now())
+  joinedAt     DateTime       @default(now())
 
   @@unique([groupClassId, studentId])
 }
-// ========== NOTIFICATIONS ==========
-enum NotificationType {
-  PAYMENT_SUCCESS
-  MINUTES_ADDED
-  BOOKING_CONFIRMED
-  BOOKING_CANCELLED
-  CHILD_BOOKING
-  CHILD_LESSON_COMPLETED
-  CHILD_PROGRESS
-  ANNOUNCEMENT
-  PODCAST_PURCHASED
-  XP_EARNED
-  ADMIN_MESSAGE
-}
 
+// ========== NOTIFICATIONS ==========
 model Notification {
   id        String           @id @default(cuid())
   userId    String
@@ -437,3 +456,64 @@ model Notification {
   @@index([userId, createdAt])
 }
 
+enum CallStatus {
+  ACTIVE
+  COMPLETED
+  CANCELLED
+}
+
+enum TeachingTimeType {
+  LESSON_COMPLETED
+  PAYMENT_REQUESTED
+  TIME_FROZEN
+  PAYMENT_COMPLETED
+  ADMIN_ADJUSTMENT
+}
+// ========== CALLS & TEACHING TIME ==========
+model Call {
+  id             String        @id @default(cuid())
+  studentId      String
+  student        StudentProfile @relation(fields: [studentId], references: [id])
+  teacherId      String
+  teacher        TeacherProfile @relation(fields: [teacherId], references: [id])
+  serviceType    ServiceType
+  agoraChannelId String?
+  startTime      DateTime      @default(now())
+  endTime        DateTime?
+  durationSec    Int           @default(0)
+  status         CallStatus    @default(ACTIVE)
+  createdAt      DateTime      @default(now())
+
+  @@index([studentId, status])
+  @@index([teacherId, status])
+}
+
+model TeachingTimeLedger {
+  id           String            @id @default(cuid())
+  teacherId    String
+  teacher      TeacherProfile    @relation(fields: [teacherId], references: [id])
+  type         TeachingTimeType
+  seconds      Int
+  balanceAfter Int
+  referenceId  String?
+  note         String?
+  createdAt    DateTime          @default(now())
+
+  @@index([teacherId, createdAt])
+}
+model Booking {
+  id          String        @id @default(cuid())
+  studentId   String
+  student     StudentProfile @relation(fields: [studentId], references: [id])
+  teacherId   String
+  teacher     TeacherProfile @relation(fields: [teacherId], references: [id])
+  serviceType ServiceType
+  scheduledAt DateTime
+  durationMin Int           @default(30)
+  status      BookingStatus @default(PENDING)
+  notes       String?
+  createdAt   DateTime      @default(now())
+
+  @@index([studentId, status])
+  @@index([teacherId, status])
+}

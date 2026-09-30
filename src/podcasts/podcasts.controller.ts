@@ -17,6 +17,17 @@ export class PodcastsController {
     return this.podcastsService.getMyPodcasts(req.user.userId);
   }
 
+    @UseGuards(AuthGuard('jwt'))
+  @Get('my-vocabulary')
+  getMyVocabulary(@Req() req: any) {
+    return this.podcastsService.getMyVocabulary(req.user.userId);
+  }
+
+    @UseGuards(AuthGuard('jwt'))
+  @Get('my-purchases')
+  getMyPodcastPurchases(@Req() req: any) {
+    return this.podcastsService.getMyPodcastPurchases(req.user.userId);
+  }
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.podcastsService.findOne(id);
