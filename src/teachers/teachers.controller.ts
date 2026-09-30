@@ -14,6 +14,7 @@ import { ProfilePhotoDto } from './dto/profile-photo.dto.js';
 import { CertificateDto } from './dto/certificate.dto.js';
 import { TeachingLanguagesDto } from './dto/teaching-languages.dto.js';
 import { HasTeacherProfileGuard } from './has-teacher-profile.guard.js';
+import { IdDocumentDto } from './dto/id-document.dto.js';
 
 @Controller('teachers')
 export class TeachersController {
@@ -163,5 +164,15 @@ export class TeachersController {
   @UseGuards(AuthGuard('jwt'))
   async becomeTeacher(@Req() req: any) {
     return this.teachersService.becomeTeacher(req.user.userId);
+  }
+    @Post('draft/submit')
+  @UseGuards(AuthGuard('jwt'), HasTeacherProfileGuard)
+  async submitApplication(@Req() req: any) {
+    return this.teachersService.submitApplication(req.user.userId);
+  }
+    @Patch('draft/id-document')
+  @UseGuards(AuthGuard('jwt'), HasTeacherProfileGuard)
+  async updateIdDocument(@Req() req: any, @Body() dto: IdDocumentDto) {
+    return this.teachersService.updateIdDocument(req.user.userId, dto.idDocumentUrl);
   }
 }

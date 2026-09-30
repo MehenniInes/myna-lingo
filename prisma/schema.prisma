@@ -152,10 +152,10 @@ model Certificate {
   id                String          @id @default(cuid())
   teacherLanguageId String
   teacherLanguage   TeacherLanguage @relation(fields: [teacherLanguageId], references: [id], onDelete: Cascade)
-  subject           String?
   description       String?
   issuedBy          String?
-  yearsOfStudy      Int?
+  yearFrom          Int?
+  yearTo            Int?
   fileUrl           String
   uploadedAt        DateTime        @default(now())
 }

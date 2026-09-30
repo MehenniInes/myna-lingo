@@ -1,4 +1,4 @@
-import { Injectable, ConflictException } from '@nestjs/common';
+import { Injectable, ConflictException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { ApplyDto } from './dto/apply.dto.js';
 
@@ -146,25 +146,30 @@ export class TeachersService {
       data,
     });
   }
-    async addCertificate(userId: string, dto: {
+  async addCertificate(userId: string, dto: {
     teacherLanguageId: string;
-    subject?: string;
     description?: string;
-    issuedBy?: string;
-    yearsOfStudy?: number;
+    issuedBy: string;
+    yearFrom: number;
+    yearTo: number;
     fileUrl: string;
   }) {
+    if (dto.yearTo < dto.yearFrom) {
+      throw new BadRequestException('End year cannot be before start year');
+    }
+
     const teacherLanguage = await this.prisma.teacherLanguage.findUnique({
       where: { id: dto.teacherLanguageId },
       include: { teacher: true },
     });
     if (!teacherLanguage || teacherLanguage.teacher.userId !== userId) {
-      throw new Error('Invalid teacher language reference');
+      throw new BadRequestException('Invalid teacher language reference');
     }
 
     return this.prisma.certificate.create({ data: dto });
   }
-    async updateTeachingLanguages(
+
+  async updateTeachingLanguages(
     userId: string,
     languages: { languageId: string; serviceType: string }[],
   ) {
@@ -194,6 +199,37 @@ export class TeachersService {
 
     return this.prisma.teacherProfile.create({
       data: { userId, applicationStatus: 'DRAFT' },
+    });
+  }
+    async submitApplication(userId: string) {
+    const profile = await this.prisma.teacherProfile.findUnique({
+      where: { userId },
+      include: { teacherLanguages: { include: { certificates: true } } },
+    });
+
+    if (!profile) {
+      throw new Error('No application found');
+    }
+    if (profile.applicationStatus !== 'DRAFT') {
+      throw new Error('Application already submitted');
+    }
+    if (!profile.idDocumentUrl) {
+      throw new Error('ID document is required before submitting');
+    }
+    const hasCertificate = profile.teacherLanguages.some((tl) => tl.certificates.length > 0);
+    if (!hasCertificate) {
+      throw new Error('At least one certificate is required before submitting');
+    }
+
+    return this.prisma.teacherProfile.update({
+      where: { userId },
+      data: { applicationStatus: 'PENDING_REVIEW' },
+    });
+  }
+    async updateIdDocument(userId: string, idDocumentUrl: string) {
+    return this.prisma.teacherProfile.update({
+      where: { userId },
+      data: { idDocumentUrl },
     });
   }
 }

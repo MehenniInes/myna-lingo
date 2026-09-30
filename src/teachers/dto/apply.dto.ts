@@ -8,7 +8,7 @@ class LanguageEntryDto {
   @IsIn(['CONVERSATION_PARTNER', 'PROFESSIONAL_TEACHER'])
   serviceType: 'CONVERSATION_PARTNER' | 'PROFESSIONAL_TEACHER';
 
-   @IsArray()
+  @IsArray()
   @ArrayMinSize(1)
   @IsString({ each: true })
   certificateUrls: string[];
@@ -36,4 +36,5 @@ export class ApplyDto {
   @ArrayMinSize(1)
   @ValidateNested({ each: true })
   @Type(() => LanguageEntryDto)
-  languages: LanguageEntryDto[];}
+  languages: LanguageEntryDto[];
+}

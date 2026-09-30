@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsInt } from 'class-validator';
+import { IsString, IsOptional, IsInt, Min, Max } from 'class-validator';
 
 export class CertificateDto {
   @IsString()
@@ -6,19 +6,20 @@ export class CertificateDto {
 
   @IsOptional()
   @IsString()
-  subject?: string;
-
-  @IsOptional()
-  @IsString()
   description?: string;
 
-  @IsOptional()
   @IsString()
-  issuedBy?: string;
+  issuedBy: string;
 
-  @IsOptional()
   @IsInt()
-  yearsOfStudy?: number;
+  @Min(1950)
+  @Max(2100)
+  yearFrom: number;
+
+  @IsInt()
+  @Min(1950)
+  @Max(2100)
+  yearTo: number;
 
   @IsString()
   fileUrl: string;
