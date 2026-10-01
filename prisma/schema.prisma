@@ -158,6 +158,8 @@ model TeacherProfile {
   isOnline        Boolean @default(false)
 
   idDocumentUrl     String?
+  availability          Json?
+  requestedHourlyRateDA Int?
   applicationStatus ApplicationStatus @default(DRAFT)
   reviewedBy        String?
   reviewedAt        DateTime?
@@ -178,19 +180,21 @@ model SpokenLanguage {
   teacher    TeacherProfile @relation(fields: [teacherId], references: [id], onDelete: Cascade)
   languageId String
   language   Language       @relation(fields: [languageId], references: [id])
-  level      String
+  level
+   String
 }
-
 model Education {
-  id           String         @id @default(cuid())
-  teacherId    String
-  teacher      TeacherProfile @relation(fields: [teacherId], references: [id], onDelete: Cascade)
-  institution  String?
-  degree       String?
-  fieldOfStudy String?
-  startYear    Int?
-  endYear      Int?
-  description  String?
+  id             String         @id @default(cuid())
+  teacherId      String
+  teacher        TeacherProfile @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+  university     String
+  degree         String
+  degreeType     String?
+  specialization String?
+  yearFrom       Int
+  yearTo         Int
+  diplomaUrl     String?
+  description    String?
 }
 
 model Certificate {

@@ -1,4 +1,4 @@
-import { Injectable, ConflictException, BadRequestException } from '@nestjs/common';
+import { Injectable, ConflictException, BadRequestException, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { ApplyDto } from './dto/apply.dto.js';
 
@@ -247,5 +247,250 @@ export class TeachersService {
         teacherLanguages: { include: { language: true } },
       },
     });
+  }
+    async addEducation(userId: string, dto: {
+    university: string;
+    degree: string;
+    degreeType?: string;
+    specialization?: string;
+    yearFrom: number;
+    yearTo: number;
+    diplomaUrl?: string;
+  }) {
+    const profile = await this.prisma.teacherProfile.findUnique({ where: { userId } });
+    if (!profile) throw new BadRequestException('Profile not found');
+
+    return this.prisma.education.create({
+      data: { teacherId: profile.id, ...dto },
+    });
+  }
+
+  async updateDescription(userId: string, description: string) {
+    return this.prisma.teacherProfile.update({
+      where: { userId },
+      data: { bio: description },
+    });
+  }
+
+  async updateAvailability(userId: string, slots: { day: string; startTime: string; endTime: string }[]) {
+    return this.prisma.teacherProfile.update({
+      where: { userId },
+      data: { availability: slots as any },
+    });
+  }
+
+  async updatePricing(userId: string, requestedHourlyRateDA: number) {
+    return this.prisma.teacherProfile.update({
+      where: { userId },
+      data: { requestedHourlyRateDA },
+    });
+  }
+    async findPublicTeachers(query: {
+    languageId?: string;
+    online?: boolean;
+    serviceType?: string;
+  }) {
+    const where: any = { applicationStatus: 'APPROVED' };
+
+    if (query.online === true) {
+      where.isOnline = true;
+    }
+
+    if (query.languageId || query.serviceType) {
+      where.teacherLanguages = {
+        some: {
+          ...(query.languageId ? { languageId: query.languageId } : {}),
+          ...(query.serviceType ? { serviceType: query.serviceType } : {}),
+        },
+      };
+    }
+
+    return this.prisma.teacherProfile.findMany({
+      where,
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        bio: true,
+        profileTitle: true,
+        profilePhotoUrl: true,
+        experienceYears: true,
+        isOnline: true,
+        countryOfBirth: true,
+        requestedHourlyRateDA: true,
+        user: { select: { fullName: true } },
+        teacherLanguages: {
+          select: {
+            id: true,
+            serviceType: true,
+            language: { select: { id: true, name: true, code: true } },
+          },
+        },
+      },
+      orderBy: [{ isOnline: 'desc' }],
+    });
+  }
+
+  async getPublicProfile(id: string) {
+    const teacher = await this.prisma.teacherProfile.findUnique({
+      where: { id },
+      include: {
+        user: { select: { fullName: true, createdAt: true } },
+        teacherLanguages: {
+          include: {
+            language: true,
+            certificates: {
+              select: {
+                id: true,
+                description: true,
+                issuedBy: true,
+                yearFrom: true,
+                yearTo: true,
+                fileUrl: true,
+              },
+            },
+          },
+        },
+        spokenLanguages: { include: { language: true } },
+        educations: true,
+      },
+    });
+
+    if (!teacher) throw new NotFoundException('Teacher not found');
+    if (teacher.applicationStatus !== 'APPROVED') {
+      throw new NotFoundException('Teacher profile not available');
+    }
+
+    const {
+      idDocumentUrl,
+      phoneNumber,
+      reviewNote,
+      reviewedBy,
+      reviewedAt,
+      userId,
+      ...publicData
+    } = teacher;
+
+    return publicData;
+  }
+
+  async setOnline(userId: string, isOnline: boolean) {
+    const profile = await this.prisma.teacherProfile.findUnique({ where: { userId } });
+    if (!profile) throw new BadRequestException('Profile not found');
+    if (profile.applicationStatus !== 'APPROVED') {
+      throw new BadRequestException('Only approved teachers can change online status');
+    }
+
+    return this.prisma.teacherProfile.update({
+      where: { userId },
+      data: { isOnline },
+      select: { id: true, isOnline: true },
+    });
+  }
+    async getMyProfile(userId: string) {
+    const profile = await this.prisma.teacherProfile.findUnique({
+      where: { userId },
+      include: {
+        user: { select: { email: true, fullName: true, createdAt: true } },
+        teacherLanguages: { include: { language: true, certificates: true } },
+        spokenLanguages: { include: { language: true } },
+        educations: true,
+      },
+    });
+    if (!profile) throw new NotFoundException('Profile not found');
+    return profile;
+  }
+
+  async getDashboard(userId: string) {
+    const profile = await this.prisma.teacherProfile.findUnique({
+      where: { userId },
+      select: { id: true, isOnline: true, applicationStatus: true },
+    });
+    if (!profile) throw new NotFoundException('Profile not found');
+
+    const now = new Date();
+
+    const startOfWeek = new Date(now);
+    const day = now.getDay();
+    const diffToMonday = day === 0 ? -6 : 1 - day;
+    startOfWeek.setDate(now.getDate() + diffToMonday);
+    startOfWeek.setHours(0, 0, 0, 0);
+
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+
+    const [
+      totalCalls,
+      weekCalls,
+      monthCalls,
+      totalSec,
+      weekSec,
+      monthSec,
+      upcomingBookings,
+      recentCalls,
+    ] = await Promise.all([
+      this.prisma.call.count({ where: { teacherId: profile.id, status: 'COMPLETED' } }),
+      this.prisma.call.count({
+        where: { teacherId: profile.id, status: 'COMPLETED', startTime: { gte: startOfWeek } },
+      }),
+      this.prisma.call.count({
+        where: { teacherId: profile.id, status: 'COMPLETED', startTime: { gte: startOfMonth } },
+      }),
+      this.prisma.call.aggregate({
+        where: { teacherId: profile.id, status: 'COMPLETED' },
+        _sum: { durationSec: true },
+      }),
+      this.prisma.call.aggregate({
+        where: { teacherId: profile.id, status: 'COMPLETED', startTime: { gte: startOfWeek } },
+        _sum: { durationSec: true },
+      }),
+      this.prisma.call.aggregate({
+        where: { teacherId: profile.id, status: 'COMPLETED', startTime: { gte: startOfMonth } },
+        _sum: { durationSec: true },
+      }),
+      this.prisma.booking.findMany({
+        where: {
+          teacherId: profile.id,
+          status: { in: ['PENDING', 'CONFIRMED'] },
+          scheduledAt: { gte: now },
+        },
+        orderBy: { scheduledAt: 'asc' },
+        take: 5,
+        include: { student: { include: { user: { select: { fullName: true } } } } },
+      }),
+      this.prisma.call.findMany({
+        where: { teacherId: profile.id, status: 'COMPLETED' },
+        orderBy: { startTime: 'desc' },
+        take: 5,
+        include: { student: { include: { user: { select: { fullName: true } } } } },
+      }),
+    ]);
+
+    return {
+      isOnline: profile.isOnline,
+      applicationStatus: profile.applicationStatus,
+      stats: {
+        totalCalls,
+        weekCalls,
+        monthCalls,
+        totalTeachingSec: totalSec._sum.durationSec ?? 0,
+        weekTeachingSec: weekSec._sum.durationSec ?? 0,
+        monthTeachingSec: monthSec._sum.durationSec ?? 0,
+      },
+      upcomingBookings: upcomingBookings.map((b) => ({
+  id: b.id,
+  scheduledAt: b.scheduledAt,
+  durationMin: b.durationMin,
+  serviceType: b.serviceType,
+  studentName: b.student.user.fullName,
+  status: b.status,
+})),
+      recentCalls: recentCalls.map((c) => ({
+        id: c.id,
+        startTime: c.startTime,
+        durationSec: c.durationSec,
+        serviceType: c.serviceType,
+        studentName: c.student.user.fullName,
+      })),
+    };
   }
 }

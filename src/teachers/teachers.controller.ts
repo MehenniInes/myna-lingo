@@ -1,4 +1,4 @@
-import { Body, Controller, Get, Param, Patch, Post, Req, UseGuards, UseInterceptors, UploadedFile, BadRequestException } from '@nestjs/common';
+import { Body, Controller, Get, Param, Patch, Post, Query, Req, UseGuards, UseInterceptors, UploadedFile, BadRequestException } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
@@ -15,6 +15,12 @@ import { CertificateDto } from './dto/certificate.dto.js';
 import { TeachingLanguagesDto } from './dto/teaching-languages.dto.js';
 import { HasTeacherProfileGuard } from './has-teacher-profile.guard.js';
 import { IdDocumentDto } from './dto/id-document.dto.js';
+import { EducationDto } from './dto/education.dto.js';
+import { DescriptionDto } from './dto/description.dto.js';
+import { AvailabilityDto } from './dto/availability.dto.js';
+import { PricingDto } from './dto/pricing.dto.js';
+import { FindTeachersDto } from './dto/find-teachers.dto.js';
+import { SetOnlineDto } from './dto/set-online.dto.js';
 
 @Controller('teachers')
 export class TeachersController {
@@ -169,5 +175,78 @@ export class TeachersController {
   @Get('online')
   getOnlineTeachers() {
     return this.teachersService.getOnlineTeachers();
+  }
+    @Post('draft/education')
+  @UseGuards(AuthGuard('jwt'), HasTeacherProfileGuard)
+  async addEducation(@Req() req: any, @Body() dto: EducationDto) {
+    return this.teachersService.addEducation(req.user.userId, dto);
+  }
+
+  @Patch('draft/description')
+  @UseGuards(AuthGuard('jwt'), HasTeacherProfileGuard)
+  async updateDescription(@Req() req: any, @Body() dto: DescriptionDto) {
+    return this.teachersService.updateDescription(req.user.userId, dto.description);
+  }
+
+  @Patch('draft/availability')
+  @UseGuards(AuthGuard('jwt'), HasTeacherProfileGuard)
+  async updateAvailability(@Req() req: any, @Body() dto: AvailabilityDto) {
+    return this.teachersService.updateAvailability(req.user.userId, dto.slots);
+  }
+
+  @Patch('draft/pricing')
+  @UseGuards(AuthGuard('jwt'), HasTeacherProfileGuard)
+  async updatePricing(@Req() req: any, @Body() dto: PricingDto) {
+    return this.teachersService.updatePricing(req.user.userId, dto.requestedHourlyRateDA);
+  }
+
+  @Post('upload/diploma')
+  @UseGuards(AuthGuard('jwt'), HasTeacherProfileGuard)
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: diskStorage({
+        destination: './uploads/diplomas',
+        filename: (req, file, cb) => {
+          const unique = Date.now() + '-' + Math.round(Math.random() * 1e9);
+          cb(null, unique + extname(file.originalname));
+        },
+      }),
+      limits: { fileSize: 20 * 1024 * 1024 },
+      fileFilter: (req, file, cb) => {
+        if (!['image/jpeg', 'image/png'].includes(file.mimetype)) {
+          return cb(new BadRequestException('Only JPEG or PNG images are allowed'), false);
+        }
+        cb(null, true);
+      },
+    }),
+  )
+  uploadDiploma(@UploadedFile() file: Express.Multer.File) {
+    return { url: `${process.env.BACKEND_URL || 'http://localhost:4000'}/uploads/diplomas/${file.filename}` };
+  }
+    @Get()
+  findAll(@Query() query: FindTeachersDto) {
+    return this.teachersService.findPublicTeachers(query);
+  }
+
+  @Patch('me/online')
+  @UseGuards(AuthGuard('jwt'), HasTeacherProfileGuard)
+  async setOnline(@Req() req: any, @Body() dto: SetOnlineDto) {
+    return this.teachersService.setOnline(req.user.userId, dto.isOnline);
+  }
+
+  @Get(':id')
+  findOne(@Param('id') id: string) {
+    return this.teachersService.getPublicProfile(id);
+  }
+    @Get('me')
+  @UseGuards(AuthGuard('jwt'), HasTeacherProfileGuard)
+  async getMe(@Req() req: any) {
+    return this.teachersService.getMyProfile(req.user.userId);
+  }
+
+  @Get('me/dashboard')
+  @UseGuards(AuthGuard('jwt'), HasTeacherProfileGuard)
+  async getDashboard(@Req() req: any) {
+    return this.teachersService.getDashboard(req.user.userId);
   }
 }
