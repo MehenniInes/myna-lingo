@@ -815,4 +815,252 @@ async reject(userId: string, bookingId: string) {
 
   return updated;
 }
+  // ===========================================================
+  // GET TEACHER BOOKINGS
+  // ===========================================================
+
+  async getTeacherBookings(
+    userId: string,
+    status?: 'PENDING' | 'CONFIRMED' | 'COMPLETED' | 'CANCELLED',
+  ) {
+    const teacher = await this.prisma.teacherProfile.findUnique({
+      where: { userId },
+    });
+
+    if (!teacher) {
+      throw new ForbiddenException('You are not a teacher');
+    }
+
+    return this.prisma.booking.findMany({
+      where: {
+        teacherId: teacher.id,
+        ...(status ? { status } : {}),
+      },
+
+      include: {
+        student: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                fullName: true,
+              },
+            },
+          },
+        },
+        teacher: {
+          include: {
+            user: {
+              select: {
+                fullName: true,
+              },
+            },
+          },
+        },
+      },
+
+      orderBy: {
+        scheduledAt: 'asc',
+      },
+    });
+  }
+
+  // ===========================================================
+  // TEACHER MARKS BOOKING AS COMPLETED
+  // ===========================================================
+
+  async complete(userId: string, bookingId: string) {
+    const teacher = await this.prisma.teacherProfile.findUnique({
+      where: { userId },
+    });
+
+    if (!teacher) {
+      throw new ForbiddenException('You are not a teacher');
+    }
+
+    const booking = await this.prisma.booking.findUnique({
+      where: { id: bookingId },
+      include: {
+        student: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                fullName: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!booking) {
+      throw new NotFoundException('Booking not found');
+    }
+
+    if (booking.teacherId !== teacher.id) {
+      throw new ForbiddenException(
+        'This booking is not assigned to you',
+      );
+    }
+
+    if (booking.status !== 'CONFIRMED') {
+      throw new BadRequestException(
+        'Only confirmed bookings can be marked as completed',
+      );
+    }
+
+    const updated = await this.prisma.booking.update({
+      where: {
+        id: booking.id,
+      },
+      data: {
+        status: 'COMPLETED',
+      },
+      include: {
+        student: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                fullName: true,
+              },
+            },
+          },
+        },
+        teacher: {
+          include: {
+            user: {
+              select: {
+                fullName: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    await this.notifications.create(
+      booking.student.user.id,
+      'BOOKING_CONFIRMED',
+      'Lesson completed',
+      `Your lesson with your teacher has been marked as completed.`,
+      {
+        bookingId: booking.id,
+        status: 'COMPLETED',
+      },
+    );
+
+    return updated;
+  }
+
+  // ===========================================================
+  // TEACHER CANCELS A BOOKING
+  // ===========================================================
+
+  async cancelByTeacher(
+    userId: string,
+    bookingId: string,
+  ) {
+    const teacher = await this.prisma.teacherProfile.findUnique({
+      where: { userId },
+    });
+
+    if (!teacher) {
+      throw new ForbiddenException('You are not a teacher');
+    }
+
+    const booking = await this.prisma.booking.findUnique({
+      where: { id: bookingId },
+      include: {
+        student: {
+          include: {
+            user: {
+              select: {
+                id: true,
+                fullName: true,
+              },
+            },
+          },
+        },
+      },
+    });
+
+    if (!booking) {
+      throw new NotFoundException('Booking not found');
+    }
+
+    if (booking.teacherId !== teacher.id) {
+      throw new ForbiddenException(
+        'This booking is not assigned to you',
+      );
+    }
+
+    if (
+      booking.status !== 'PENDING' &&
+      booking.status !== 'CONFIRMED'
+    ) {
+      throw new BadRequestException(
+        'This booking cannot be cancelled',
+      );
+    }
+
+    const refundSeconds = booking.durationMin * 60;
+
+    const updated = await this.prisma.$transaction(
+      async (tx) => {
+        const latestLedger =
+          await tx.minuteLedgerEntry.findFirst({
+            where: {
+              studentId: booking.studentId,
+            },
+            orderBy: {
+              createdAt: 'desc',
+            },
+          });
+
+        const currentBalance =
+          latestLedger?.balanceAfter ?? 0;
+
+        const newBalance =
+          currentBalance + refundSeconds;
+
+        const cancelled =
+          await tx.booking.update({
+            where: {
+              id: booking.id,
+            },
+            data: {
+              status: 'CANCELLED',
+            },
+          });
+
+        await tx.minuteLedgerEntry.create({
+          data: {
+            studentId: booking.studentId,
+            type: 'REFUND',
+            seconds: refundSeconds,
+            balanceAfter: newBalance,
+            referenceId: booking.id,
+            note: `Refund for teacher-cancelled booking ${booking.id}`,
+          },
+        });
+
+        return cancelled;
+      },
+    );
+
+    await this.notifications.create(
+      booking.student.user.id,
+      'BOOKING_CANCELLED',
+      'Lesson cancelled',
+      `Your lesson for ${booking.scheduledAt.toLocaleString()} was cancelled by the teacher. Your minutes have been refunded.`,
+      {
+        bookingId: booking.id,
+        status: 'CANCELLED',
+      },
+    );
+
+    return updated;
+  }
 }
