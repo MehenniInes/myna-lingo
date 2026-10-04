@@ -356,96 +356,98 @@ export class BookingsService {
     return result;
   }
 
-  // ===========================================================
+   // ===========================================================
   // TEACHER AVAILABILITY
   // ===========================================================
 
-  private validateTeacherAvailability(
-    availability: unknown,
-    scheduled: Date,
-    lessonEnd: Date,
-  ) {
-    if (!availability) {
-      throw new BadRequestException(
-        'This teacher has not configured their availability',
-      );
-    }
-
-    if (!Array.isArray(availability)) {
-      throw new BadRequestException(
-        'Teacher availability is invalid',
-      );
-    }
-
-    const dayName = scheduled.toLocaleDateString(
-      'en-US',
-      {
-        weekday: 'long',
-      },
+ private validateTeacherAvailability(
+  availability: unknown,
+  scheduled: Date,
+  lessonEnd: Date,
+) {
+  if (!availability) {
+    throw new BadRequestException(
+      'Teacher has not set any availability',
     );
-
-    const startTime = scheduled.toLocaleTimeString(
-      'en-US',
-      {
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: false,
-      },
-    );
-
-    const endTime = lessonEnd.toLocaleTimeString(
-      'en-US',
-      {
-        hour: '2-digit',
-        minute: '2-digit',
-        hour12: false,
-      },
-    );
-
-    const matchingSlots = availability.filter(
-      (slot: any) => {
-        return (
-          String(slot.day).toLowerCase() ===
-          dayName.toLowerCase()
-        );
-      },
-    );
-
-    if (matchingSlots.length === 0) {
-      throw new BadRequestException(
-        `Teacher is not available on ${dayName}`,
-      );
-    }
-
-    const fitsInsideAvailability =
-      matchingSlots.some((slot: any) => {
-        if (!slot.startTime || !slot.endTime) {
-          return false;
-        }
-
-        return (
-          this.timeToMinutes(startTime) >=
-            this.timeToMinutes(slot.startTime) &&
-          this.timeToMinutes(endTime) <=
-            this.timeToMinutes(slot.endTime)
-        );
-      });
-
-    if (!fitsInsideAvailability) {
-      throw new BadRequestException(
-        'The selected lesson time is outside the teacher availability',
-      );
-    }
   }
 
-  private timeToMinutes(time: string): number {
-    const [hours, minutes] = time
-      .split(':')
-      .map(Number);
+  if (!Array.isArray(availability)) {
+    throw new BadRequestException(
+      'Teacher availability is invalid',
+    );
+  }
+
+  const dayNames: Record<string, string> = {
+    SUN: 'Sunday',
+    MON: 'Monday',
+    TUE: 'Tuesday',
+    WED: 'Wednesday',
+    THU: 'Thursday',
+    FRI: 'Friday',
+    SAT: 'Saturday',
+  };
+
+  const jsDay = scheduled.getDay();
+
+  const requestedDayCode = [
+    'SUN',
+    'MON',
+    'TUE',
+    'WED',
+    'THU',
+    'FRI',
+    'SAT',
+  ][jsDay];
+
+  const requestedDayName = dayNames[requestedDayCode];
+
+  const normalizeDay = (day: string) => {
+    const value = day.trim().toUpperCase();
+
+    // Already using MON, TUE, etc.
+    if (dayNames[value]) {
+      return value;
+    }
+
+    // Using full name: Monday, Tuesday, etc.
+    const matchingEntry = Object.entries(dayNames).find(
+      ([, fullName]) => fullName.toUpperCase() === value,
+    );
+
+    return matchingEntry?.[0] ?? value;
+  };
+
+  const matchingSlots = availability.filter(
+    (slot: any) =>
+      slot &&
+      typeof slot.day === 'string' &&
+      normalizeDay(slot.day) === requestedDayCode,
+  );
+
+  if (matchingSlots.length === 0) {
+    throw new BadRequestException(
+      `Teacher is not available on ${requestedDayName}`,
+    );
+  }
+
+  const lessonStartMinutes =
+    scheduled.getHours() * 60 +
+    scheduled.getMinutes();
+
+  const lessonEndMinutes =
+    lessonEnd.getHours() * 60 +
+    lessonEnd.getMinutes();
+
+  const timeToMinutes = (time: string): number => {
+    const [hours, minutes] = time.split(':').map(Number);
 
     if (
       Number.isNaN(hours) ||
-      Number.isNaN(minutes)
+      Number.isNaN(minutes) ||
+      hours < 0 ||
+      hours > 23 ||
+      minutes < 0 ||
+      minutes > 59
     ) {
       throw new BadRequestException(
         'Invalid availability time',
@@ -453,8 +455,38 @@ export class BookingsService {
     }
 
     return hours * 60 + minutes;
-  }
+  };
 
+  const fitsInsideAvailability = matchingSlots.some(
+    (slot: any) => {
+      if (
+        typeof slot.startTime !== 'string' ||
+        typeof slot.endTime !== 'string'
+      ) {
+        return false;
+      }
+
+      const startMinutes = timeToMinutes(
+        slot.startTime,
+      );
+
+      const endMinutes = timeToMinutes(
+        slot.endTime,
+      );
+
+      return (
+        lessonStartMinutes >= startMinutes &&
+        lessonEndMinutes <= endMinutes
+      );
+    },
+  );
+
+  if (!fitsInsideAvailability) {
+    throw new BadRequestException(
+      `Teacher is not available at this time on ${requestedDayName}`,
+    );
+  }
+}
   // ===========================================================
   // GET STUDENT BOOKINGS
   // ===========================================================
@@ -865,7 +897,7 @@ async reject(userId: string, bookingId: string) {
     });
   }
 
-  // ===========================================================
+   // ===========================================================
   // TEACHER MARKS BOOKING AS COMPLETED
   // ===========================================================
 
@@ -910,48 +942,101 @@ async reject(userId: string, bookingId: string) {
       );
     }
 
-    const updated = await this.prisma.booking.update({
-      where: {
-        id: booking.id,
-      },
-      data: {
-        status: 'COMPLETED',
-      },
-      include: {
-        student: {
-          include: {
-            user: {
-              select: {
-                id: true,
-                fullName: true,
+    // The teacher earns the full booked lesson duration.
+    const teachingSeconds = booking.durationMin * 60;
+
+    const result = await this.prisma.$transaction(
+      async (tx) => {
+        // -------------------------------------------------------
+        // 1. Get the teacher's current teaching-time balance
+        // -------------------------------------------------------
+
+        const latestTeachingTime =
+          await tx.teachingTimeLedger.findFirst({
+            where: {
+              teacherId: teacher.id,
+            },
+            orderBy: {
+              createdAt: 'desc',
+            },
+          });
+
+        const currentTeachingSeconds =
+          latestTeachingTime?.balanceAfter ?? 0;
+
+        const newTeachingSeconds =
+          currentTeachingSeconds + teachingSeconds;
+
+        // -------------------------------------------------------
+        // 2. Mark booking as COMPLETED
+        // -------------------------------------------------------
+
+        const completedBooking =
+          await tx.booking.update({
+            where: {
+              id: booking.id,
+            },
+            data: {
+              status: 'COMPLETED',
+            },
+            include: {
+              student: {
+                include: {
+                  user: {
+                    select: {
+                      id: true,
+                      fullName: true,
+                    },
+                  },
+                },
+              },
+              teacher: {
+                include: {
+                  user: {
+                    select: {
+                      fullName: true,
+                    },
+                  },
+                },
               },
             },
+          });
+
+        // -------------------------------------------------------
+        // 3. Record teacher's earned teaching time
+        // -------------------------------------------------------
+
+        await tx.teachingTimeLedger.create({
+          data: {
+            teacherId: teacher.id,
+            type: 'LESSON_COMPLETED',
+            seconds: teachingSeconds,
+            balanceAfter: newTeachingSeconds,
+            referenceId: booking.id,
+            note: `Teaching time earned from completed booking ${booking.id}`,
           },
-        },
-        teacher: {
-          include: {
-            user: {
-              select: {
-                fullName: true,
-              },
-            },
-          },
-        },
+        });
+
+        return completedBooking;
       },
-    });
+    );
+
+    // ---------------------------------------------------------
+    // 4. Notify student
+    // ---------------------------------------------------------
 
     await this.notifications.create(
       booking.student.user.id,
       'BOOKING_CONFIRMED',
       'Lesson completed',
-      `Your lesson with your teacher has been marked as completed.`,
+      `Your lesson with your teacher has been completed.`,
       {
         bookingId: booking.id,
         status: 'COMPLETED',
       },
     );
 
-    return updated;
+    return result;
   }
 
   // ===========================================================
