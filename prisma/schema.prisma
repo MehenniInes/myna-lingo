@@ -8,6 +8,18 @@ datasource db {
 }
 
 // ========== ENUMS ==========
+enum PresenceStatus {
+  IN_CALL
+  DISCONNECTED_PENDING
+  LEFT
+}
+
+enum GroupSessionStatus {
+  ACTIVE
+  COMPLETED
+  CANCELLED
+}
+
 enum Role {
   STUDENT
   PARENT
@@ -110,6 +122,7 @@ model User {
   podcastProgress  PodcastProgress[]
   xpTransactions   XPTransaction[]
   notifications    Notification[]
+  roomPresence RoomPresence[]
 
   @@index([role])
 }
@@ -430,6 +443,7 @@ model GroupClass {
   createdAt   DateTime       @default(now())
 
   participants GroupParticipant[]
+  sessions GroupSession[]
 }
 
 model GroupParticipant {
@@ -520,4 +534,38 @@ model Booking {
 
   @@index([studentId, status])
   @@index([teacherId, status])
+}
+
+// ========== GROUP SESSIONS (Persistent Rooms) ==========
+model GroupSession {
+  id           String             @id @default(cuid())
+  groupClassId String
+  groupClass   GroupClass         @relation(fields: [groupClassId], references: [id])
+  roomId       String             @unique
+  agoraChannel String?
+  status       GroupSessionStatus @default(ACTIVE)
+  startedAt    DateTime           @default(now())
+  endedAt      DateTime?
+  createdBy    String
+  createdAt    DateTime           @default(now())
+
+  participants RoomPresence[]
+
+  @@index([groupClassId, status])
+}
+
+model RoomPresence {
+  id         String         @id @default(cuid())
+  sessionId  String
+  session    GroupSession   @relation(fields: [sessionId], references: [id], onDelete: Cascade)
+  userId     String
+  user       User           @relation(fields: [userId], references: [id], onDelete: Cascade)
+  status     PresenceStatus @default(IN_CALL)
+  joinedAt   DateTime       @default(now())
+  lastSeenAt DateTime       @default(now())
+  leftAt     DateTime?
+
+  @@unique([sessionId, userId])
+  @@index([userId, status])
+  @@index([sessionId, status])
 }

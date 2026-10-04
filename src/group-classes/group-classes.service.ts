@@ -132,4 +132,18 @@ export class GroupClassesService {
       orderBy: { joinedAt: 'desc' },
     });
   }
+
+  async getSessions(groupClassId: string) {
+  return this.prisma.groupSession.findMany({
+    where: { groupClassId },
+    include: {
+      participants: {
+        where: { status: 'IN_CALL' },     // ← THIS LINE
+        include: { user: { select: { id: true, fullName: true } } },
+      },
+    },
+    orderBy: { startedAt: 'desc' },
+    take: 10,
+  });
+}
 }
