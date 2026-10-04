@@ -1,15 +1,19 @@
 import { IsString, IsOptional, IsInt, Min, Max } from 'class-validator';
 
-export class CertificateDto {
+export class EducationDto {
   @IsString()
-  teacherLanguageId: string;
+  university: string;
+
+  @IsString()
+  degree: string;
 
   @IsOptional()
   @IsString()
-  description?: string;
+  degreeType?: string;
 
+  @IsOptional()
   @IsString()
-  issuedBy: string;
+  specialization?: string;
 
   @IsInt()
   @Min(1950)
@@ -21,6 +25,7 @@ export class CertificateDto {
   @Max(2100)
   yearTo: number;
 
+  @IsOptional()
   @IsString()
-  fileUrl: string;
+  diplomaUrl?: string;
 }
