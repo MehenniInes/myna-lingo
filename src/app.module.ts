@@ -16,9 +16,13 @@ import { GroupClassesModule } from './group-classes/group-classes.module.js';
 import { AdminModule } from './admin/admin.module.js';
 import { CallsModule } from './calls/calls.module.js';
 import { BookingsModule } from './bookings/bookings.module.js';
+import { GroupSessionsModule } from './group-sessions/group-sessions.module.js';
+import { ScheduleModule } from '@nestjs/schedule';
+import { AgoraModule } from './agora/agora.module.js';
 
 @Module({
   imports: [
+     ScheduleModule.forRoot(),
     AuthModule,
     UsersModule,
     PrismaModule,
@@ -34,6 +38,8 @@ import { BookingsModule } from './bookings/bookings.module.js';
     AdminModule,
     CallsModule,
     BookingsModule,
+    GroupSessionsModule,
+    AgoraModule, 
   ],
   controllers: [AppController],
   providers: [AppService],

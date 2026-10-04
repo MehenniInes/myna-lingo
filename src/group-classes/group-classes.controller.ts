@@ -17,6 +17,11 @@ export class GroupClassesController {
     return this.groupClassesService.getMyClasses(req.user.userId);
   }
 
+  @Get(':id/sessions')
+  getSessions(@Param('id') id: string) {
+    return this.groupClassesService.getSessions(id);
+  }
+
   @Get(':id')
   findOne(@Param('id') id: string) {
     return this.groupClassesService.findOne(id);
