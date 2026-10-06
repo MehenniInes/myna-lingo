@@ -7,7 +7,7 @@ import { AgoraTokenService } from './agora-token.service.js';
 export class AgoraController {
   constructor(private readonly agoraTokenService: AgoraTokenService) {}
 
-   @Get('token')
+    @Get('token')
   getToken(
     @Query('channel') channel: string,
     @Query('uid') uid: string,
@@ -21,7 +21,9 @@ export class AgoraController {
     let userUid: number;
     if (uid) {
       const parsed = Number(uid);
-      userUid = parsed >= 0 && parsed <= 65535 ? parsed : Math.floor(Math.random() * 60000) + 1;
+      userUid = parsed >= 0 && parsed <= 65535
+        ? parsed
+        : Math.floor(Math.random() * 60000) + 1;
     } else {
       userUid = Math.floor(Math.random() * 60000) + 1;
     }

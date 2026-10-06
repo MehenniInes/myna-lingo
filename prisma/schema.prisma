@@ -193,8 +193,7 @@ model SpokenLanguage {
   teacher    TeacherProfile @relation(fields: [teacherId], references: [id], onDelete: Cascade)
   languageId String
   language   Language       @relation(fields: [languageId], references: [id])
-  level
-   String
+  level String
 }
 model Education {
   id             String         @id @default(cuid())
