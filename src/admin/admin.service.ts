@@ -3,6 +3,23 @@ import { PrismaService } from '../prisma/prisma.service.js';
 
 @Injectable()
 export class AdminService {
+    async getPendingStudents() {
+    return this.prisma.user.findMany({
+      where: {
+        role: 'STUDENT',
+        paymentStatus: 'PENDING_VERIFICATION',
+      },
+      select: {
+        id: true,
+        email: true,
+        fullName: true,
+        tier: true,
+        paymentStatus: true,
+        createdAt: true,
+      },
+      orderBy: { createdAt: 'desc' },
+    });
+  }
   constructor(private prisma: PrismaService) {}
 
   // ===== PACKAGES =====
@@ -63,19 +80,52 @@ export class AdminService {
   }
 
     // ===== USERS =====
-  async getAllUsers(role?: string) {
+    async getAllUsers(role?: string, filter?: string) {
+    const where: any = {};
+    if (role) where.role = role as any;
+    if (filter === 'pending') {
+      where.paymentStatus = 'PENDING_VERIFICATION';
+    }
     return this.prisma.user.findMany({
-      where: role ? { role: role as any } : {},
+      where,
       select: {
         id: true,
         email: true,
         fullName: true,
         role: true,
         isActive: true,
+        tier: true,              // ← new
+        paymentStatus: true,     // ← new
         createdAt: true,
       },
       orderBy: { createdAt: 'desc' },
     });
+  }
+
+  async updateUserTier(id: string, tier: string) {
+    const user = await this.prisma.user.findUnique({ where: { id } });
+    if (!user) throw new NotFoundException('User not found');
+    return this.prisma.user.update({
+      where: { id },
+      data: { tier: tier as any },
+    });
+  }
+
+  async updateUserPaymentStatus(id: string, paymentStatus: string) {
+    const user = await this.prisma.user.findUnique({ where: { id } });
+    if (!user) throw new NotFoundException('User not found');
+    return this.prisma.user.update({
+      where: { id },
+      data: { paymentStatus: paymentStatus as any },
+    });
+  }
+
+  async bulkActivatePending() {
+    const result = await this.prisma.user.updateMany({
+      where: { paymentStatus: 'PENDING_VERIFICATION' },
+      data: { paymentStatus: 'ACTIVE' },
+    });
+    return { activatedCount: result.count };
   }
 
   async toggleUserActive(id: string) {

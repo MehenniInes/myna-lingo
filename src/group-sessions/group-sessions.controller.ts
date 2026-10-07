@@ -12,10 +12,10 @@ export class GroupSessionsController {
     return this.groupSessionsService.startSession(req.user.userId, groupClassId);
   }
 
-  @Get('active')
-  getMyActiveSession(@Req() req: any) {
-    return this.groupSessionsService.getMyActiveSession(req.user.userId);
-  }
+ @Get('active')
+getMyActiveSession(@Req() req: any) {
+  return this.groupSessionsService.getMyActiveSession(req.user.userId);
+}
 
   @Get(':id')
   getSession(@Param('id') id: string) {

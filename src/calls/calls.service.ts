@@ -1,6 +1,7 @@
 import {
   Injectable, NotFoundException, BadRequestException, ForbiddenException,
 } from '@nestjs/common';
+import { Cron } from '@nestjs/schedule';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { NotificationsService } from '../notifications/notifications.service.js';
 import agoraToken from 'agora-token';
@@ -236,5 +237,48 @@ export class CallsService {
       studentName: call.student.user.fullName,
       startTime: call.startTime,
     };
+  }
+
+  
+  // Auto-end calls that have been active for more than 2 hours
+  // (protects against abandoned tabs, disconnected users, etc.)
+  @Cron('0 */5 * * * *') // every 5 minutes
+  async autoEndStaleCalls() {
+    const cutoff = new Date(Date.now() - 2 * 60 * 60 * 1000); // 2 hours ago
+    const result = await this.prisma.call.updateMany({
+      where: {
+        status: 'ACTIVE',
+        startTime: { lt: cutoff },
+      },
+      data: {
+        status: 'CANCELLED',
+        endTime: new Date(),
+      },
+    });
+    if (result.count > 0) {
+      console.log(`[Cron] Auto-ended ${result.count} stale call(s)`);
+    }
+  }
+    // Teacher polls this to see if any student is calling them
+  async getActiveCallForTeacher(userId: string) {
+    const teacher = await this.prisma.teacherProfile.findUnique({
+      where: { userId },
+    });
+    if (!teacher) return null;
+
+    return this.prisma.call.findFirst({
+      where: {
+        teacherId: teacher.id,
+        status: 'ACTIVE',
+      },
+      include: {
+        student: {
+          include: {
+            user: { select: { fullName: true, email: true } },
+          },
+        },
+      },
+      orderBy: { startTime: 'desc' },
+    });
   }
 }

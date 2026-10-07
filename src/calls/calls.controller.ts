@@ -25,11 +25,22 @@ export class CallsController {
     return this.callsService.getActiveCall(req.user.userId);
   }
 
+    @Get('active-for-teacher')
+  getActiveForTeacher(@Req() req: any) {
+    return this.callsService.getActiveCallForTeacher(req.user.userId);
+  }
+
   @Get('my')
   getMyCalls(@Req() req: any) {
     return this.callsService.getMyCalls(req.user.userId);
   }
-    @Get(':id/teacher-token')
+  
+  @Get('balance')
+  getBalance(@Req() req: any) {
+    return this.callsService.getBalance(req.user.userId);
+  }
+
+  @Get(':id/teacher-token')
   getTeacherToken(@Req() req: any, @Param('id') id: string) {
     return this.callsService.getCallForTeacher(req.user.userId, id);
   }

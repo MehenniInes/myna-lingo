@@ -4,8 +4,6 @@ import { AdminService } from './admin.service.js';
 import { RolesGuard } from '../auth/roles.guard.js';
 import { Roles } from '../auth/roles.decorator.js';
 
-
-
 @Controller('admin')
 @UseGuards(AuthGuard('jwt'), RolesGuard)
 @Roles('ADMIN')
@@ -16,7 +14,8 @@ export class AdminController {
   getStats() {
     return this.adminService.getStats();
   }
-    @Get('analytics')
+
+  @Get('analytics')
   getAnalytics() {
     return this.adminService.getAnalytics();
   }
@@ -41,7 +40,8 @@ export class AdminController {
   deletePackage(@Param('id') id: string) {
     return this.adminService.deletePackage(id);
   }
-    // Podcasts
+
+  // Podcasts
   @Get('podcasts')
   getAllPodcasts() {
     return this.adminService.getAllPodcasts();
@@ -61,10 +61,38 @@ export class AdminController {
   deletePodcast(@Param('id') id: string) {
     return this.adminService.deletePodcast(id);
   }
-    // Users
+
+  // Users
   @Get('users')
-  getAllUsers(@Query('role') role?: string) {
-    return this.adminService.getAllUsers(role);
+  getAllUsers(
+    @Query('role') role?: string,
+    @Query('filter') filter?: string,
+  ) {
+    return this.adminService.getAllUsers(role, filter);
+  }
+
+  // ⚠️ MUST be BEFORE @Get('users/:id') — even though we don't have that, keep it here
+  @Get('users/pending')
+  getPendingStudents() {
+    return this.adminService.getPendingStudents();
+  }
+
+  @Patch('users/:id/tier')
+  updateUserTier(@Param('id') id: string, @Body() body: { tier: string }) {
+    return this.adminService.updateUserTier(id, body.tier);
+  }
+
+  @Patch('users/:id/payment-status')
+  updateUserPaymentStatus(
+    @Param('id') id: string,
+    @Body() body: { paymentStatus: string },
+  ) {
+    return this.adminService.updateUserPaymentStatus(id, body.paymentStatus);
+  }
+
+  @Post('users/bulk-activate')
+  bulkActivatePending() {
+    return this.adminService.bulkActivatePending();
   }
 
   @Patch('users/:id/toggle-active')
@@ -72,7 +100,7 @@ export class AdminController {
     return this.adminService.toggleUserActive(id);
   }
 
-    // Activities
+  // Activities
   @Get('activities')
   getAllActivities() {
     return this.adminService.getAllActivities();

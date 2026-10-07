@@ -1,0 +1,10 @@
+[33m864b6e0[m[33m ([m[1;36mHEAD[m[33m -> [m[1;32mmain[m[33m)[m Merge branch 'main' of https://github.com/MehenniInes/myna-lingo
+[33m71f794f[m Save my local work
+[33m9194b81[m[33m ([m[1;31morigin/main[m[33m, [m[1;31morigin/HEAD[m[33m)[m Merge branch 'main' of https://github.com/MehenniInes/myna-lingo
+[33meca0d68[m feat: Agora token generation, channel names, balance endpoint, teacher call token
+[33m952d468[m Merge with Ines's languages module
+[33mb3e195c[m Add Agora video token integration
+[33mb5e41f1[m Add teacher-side bookings: view/filter by status, mark completed/cancelled
+[33m5a8fb8d[m Update teacher onboarding and booking flow
+[33m79547a8[m Merge friend's Bookings/Calls/Admin/GroupClasses modules with wizard changes
+[33m88ba825[m Add submit endpoint and ID document draft step to teacher wizard

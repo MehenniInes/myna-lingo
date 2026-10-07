@@ -8,6 +8,20 @@ datasource db {
 }
 
 // ========== ENUMS ==========
+enum UserTier {
+  TRIAL
+  NORMAL
+  PREMIUM
+  VIP
+}
+
+enum PaymentStatus {
+  NONE
+  PENDING_VERIFICATION
+  ACTIVE
+  REFUNDED
+}
+
 enum PresenceStatus {
   IN_CALL
   DISCONNECTED_PENDING
@@ -112,6 +126,8 @@ model User {
   locale       String   @default("ar")
   isActive     Boolean  @default(true)
   createdAt    DateTime @default(now())
+  tier          UserTier      @default(TRIAL)
+  paymentStatus PaymentStatus @default(NONE)
   updatedAt    DateTime @updatedAt
 
   studentProfile StudentProfile?
