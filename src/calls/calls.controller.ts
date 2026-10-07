@@ -20,7 +20,7 @@ export class CallsController {
     return this.callsService.endCall(req.user.userId, id);
   }
 
-  @Get('active')
+   @Get('active')
   getActiveCall(@Req() req: any) {
     return this.callsService.getActiveCall(req.user.userId);
   }
@@ -29,7 +29,13 @@ export class CallsController {
   getMyCalls(@Req() req: any) {
     return this.callsService.getMyCalls(req.user.userId);
   }
-    @Get(':id/teacher-token')
+
+  @Get('active-for-teacher')
+  getActiveForTeacher(@Req() req: any) {
+    return this.callsService.getActiveCallForTeacher(req.user.userId);
+  }
+
+  @Get(':id/teacher-token')
   getTeacherToken(@Req() req: any, @Param('id') id: string) {
     return this.callsService.getCallForTeacher(req.user.userId, id);
   }

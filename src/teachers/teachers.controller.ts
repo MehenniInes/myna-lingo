@@ -521,6 +521,11 @@ export class TeachersController {
   async getDashboard(@Req() req: any) {
     return this.teachersService.getDashboard(req.user.userId);
   }
+    @Get('me/teaching-time')
+  @UseGuards(AuthGuard('jwt'), HasTeacherProfileGuard)
+  async getTeachingTime(@Req() req: any) {
+    return this.teachersService.getTeachingTimeBreakdown(req.user.userId);
+  }
 
   // =========================================================
   // CURRENT TEACHER ONLINE STATUS
