@@ -40,6 +40,7 @@ enum Role {
   TEACHER
   ADMIN
 }
+
 enum BookingStatus {
   PENDING
   CONFIRMED
@@ -115,6 +116,20 @@ enum NotificationType {
   ADMIN_MESSAGE
 }
 
+// ========== REFERRALS ==========
+model ReferralReward {
+  id           String   @id @default(cuid())
+  inviterId    String
+  inviter      User     @relation("ReferralRewardsGiven", fields: [inviterId], references: [id], onDelete: Cascade)
+  invitedId    String   @unique
+  invited      User     @relation("ReferralRewardsReceived", fields: [invitedId], references: [id], onDelete: Cascade)
+  minutesGiven Int      @default(10)
+  signupIp     String?
+  createdAt    DateTime @default(now())
+
+  @@index([inviterId, createdAt])
+}
+
 // ========== USERS ==========
 model User {
   id           String   @id @default(cuid())
@@ -125,19 +140,21 @@ model User {
   phone        String?
   locale       String   @default("ar")
   isActive     Boolean  @default(true)
+
+  tier              UserTier      @default(TRIAL)
+  paymentStatus     PaymentStatus @default(NONE)
+  referralCode      String?       @unique
+  referredByUserId  String?
+  referredBy        User?         @relation("UserReferrals", fields: [referredByUserId], references: [id], onDelete: SetNull)
+  referredUsers     User[]        @relation("UserReferrals")
+
+  referralRewardsGiven    ReferralReward[] @relation("ReferralRewardsGiven")
+  referralRewardsReceived ReferralReward?  @relation("ReferralRewardsReceived")
+
   createdAt    DateTime @default(now())
-  tier          UserTier      @default(TRIAL)
-  paymentStatus PaymentStatus @default(NONE)
   updatedAt    DateTime @updatedAt
 
   studentProfile StudentProfile?
-    // ===== REFERRALS =====
-  referralCode     String?   @unique
-  referredByUserId String?
-  referredBy       User?     @relation("Referrals", fields: [referredByUserId], references: [id])
-  referrals        User[]    @relation("Referrals")
-  referralRewards  ReferralReward[] @relation("RewardInviter")
-  receivedRewards  ReferralReward[] @relation("RewardInvited")
   teacherProfile TeacherProfile?
   parentProfile  ParentProfile?
 
@@ -145,7 +162,7 @@ model User {
   podcastProgress  PodcastProgress[]
   xpTransactions   XPTransaction[]
   notifications    Notification[]
-  roomPresence RoomPresence[]
+  roomPresence     RoomPresence[]
 
   @@index([role])
 }
@@ -171,8 +188,8 @@ model StudentProfile {
   ledgerEntries       MinuteLedgerEntry[]
   packagePurchases    PackagePurchase[]
   groupParticipations GroupParticipant[]
-  calls Call[]
-  bookings Booking[]
+  calls               Call[]
+  bookings            Booking[]
 }
 
 // ========== TEACHER ==========
@@ -193,24 +210,22 @@ model TeacherProfile {
   profilePhotoUrl String?
   isOnline        Boolean @default(false)
 
-  idDocumentUrl     String?
+  idDocumentUrl         String?
   availability          Json?
   requestedHourlyRateDA Int?
   internalHourlyRateDA  Int?
-  applicationStatus ApplicationStatus @default(DRAFT)
-  reviewedBy        String?
-  reviewedAt        DateTime?
-  reviewNote        String?
-  
-  
+  applicationStatus     ApplicationStatus @default(DRAFT)
+  reviewedBy            String?
+  reviewedAt            DateTime?
+  reviewNote            String?
 
-  teacherLanguages TeacherLanguage[]
-  spokenLanguages  SpokenLanguage[]
-  educations       Education[]
-  groupClasses     GroupClass[]
-  calls              Call[]
-  teachingTimeLedger TeachingTimeLedger[]
-  bookings Booking[]
+  teacherLanguages    TeacherLanguage[]
+  spokenLanguages     SpokenLanguage[]
+  educations          Education[]
+  groupClasses        GroupClass[]
+  calls               Call[]
+  teachingTimeLedger  TeachingTimeLedger[]
+  bookings            Booking[]
 }
 
 model SpokenLanguage {
@@ -219,8 +234,9 @@ model SpokenLanguage {
   teacher    TeacherProfile @relation(fields: [teacherId], references: [id], onDelete: Cascade)
   languageId String
   language   Language       @relation(fields: [languageId], references: [id])
-  level String
+  level      String
 }
+
 model Education {
   id             String         @id @default(cuid())
   teacherId      String
@@ -468,7 +484,7 @@ model GroupClass {
   createdAt   DateTime       @default(now())
 
   participants GroupParticipant[]
-  sessions GroupSession[]
+  sessions     GroupSession[]
 }
 
 model GroupParticipant {
@@ -499,6 +515,7 @@ model Notification {
   @@index([userId, createdAt])
 }
 
+// ========== CALLS & TEACHING TIME ==========
 enum CallStatus {
   ACTIVE
   COMPLETED
@@ -512,20 +529,20 @@ enum TeachingTimeType {
   PAYMENT_COMPLETED
   ADMIN_ADJUSTMENT
 }
-// ========== CALLS & TEACHING TIME ==========
+
 model Call {
-  id             String        @id @default(cuid())
+  id             String         @id @default(cuid())
   studentId      String
   student        StudentProfile @relation(fields: [studentId], references: [id])
   teacherId      String
   teacher        TeacherProfile @relation(fields: [teacherId], references: [id])
   serviceType    ServiceType
   agoraChannelId String?
-  startTime      DateTime      @default(now())
+  startTime      DateTime       @default(now())
   endTime        DateTime?
-  durationSec    Int           @default(0)
-  status         CallStatus    @default(ACTIVE)
-  createdAt      DateTime      @default(now())
+  durationSec    Int            @default(0)
+  status         CallStatus     @default(ACTIVE)
+  createdAt      DateTime       @default(now())
 
   @@index([studentId, status])
   @@index([teacherId, status])
@@ -544,6 +561,7 @@ model TeachingTimeLedger {
 
   @@index([teacherId, createdAt])
 }
+
 model Booking {
   id          String        @id @default(cuid())
   studentId   String
@@ -593,18 +611,4 @@ model RoomPresence {
   @@unique([sessionId, userId])
   @@index([userId, status])
   @@index([sessionId, status])
-}
-// ========== REFERRALS ==========
-model ReferralReward {
-  id           String   @id @default(cuid())
-  inviterId    String
-  inviter      User     @relation("RewardInviter", fields: [inviterId], references: [id], onDelete: Cascade)
-  invitedId    String
-  invited      User     @relation("RewardInvited", fields: [invitedId], references: [id], onDelete: Cascade)
-  minutesGiven Int      @default(10)
-  signupIp     String?
-  createdAt    DateTime @default(now())
-
-  @@unique([invitedId])
-  @@index([inviterId, createdAt])
 }
