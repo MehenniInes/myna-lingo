@@ -1,4 +1,4 @@
-import { Body, Controller, Post, Get, UseGuards } from '@nestjs/common';
+import { Body, Controller, Post, Get, UseGuards, Req } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { AuthService } from './auth.service.js';
 import { CreateUserDto } from '../users/dto/create-user.dto.js';
@@ -11,8 +11,13 @@ export class AuthController {
   constructor(private authService: AuthService) {}
 
   @Post('register')
-  async register(@Body() dto: CreateUserDto) {
-    return this.authService.register(dto);
+    register(@Body() dto: CreateUserDto, @Req() req: any) {
+    const ip =
+    req.ip ||
+    req.headers['x-forwarded-for'] ||
+    req.socket?.remoteAddress ||
+    null;
+   return this.authService.register(dto, ip);
   }
 
   @Post('login')

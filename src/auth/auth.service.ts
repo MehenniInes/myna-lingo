@@ -11,9 +11,9 @@ export class AuthService {
     private jwtService: JwtService,
   ) {}
 
-  async register(dto: CreateUserDto) {
-    return this.usersService.create(dto);
-  }
+  async register(dto: CreateUserDto, signupIp?: string) {
+  return this.usersService.create({ ...dto, signupIp });
+}
 
   async login(email: string, password: string) {
     const user = await this.usersService.findByEmail(email);

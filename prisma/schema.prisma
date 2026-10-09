@@ -131,6 +131,13 @@ model User {
   updatedAt    DateTime @updatedAt
 
   studentProfile StudentProfile?
+    // ===== REFERRALS =====
+  referralCode     String?   @unique
+  referredByUserId String?
+  referredBy       User?     @relation("Referrals", fields: [referredByUserId], references: [id])
+  referrals        User[]    @relation("Referrals")
+  referralRewards  ReferralReward[] @relation("RewardInviter")
+  receivedRewards  ReferralReward[] @relation("RewardInvited")
   teacherProfile TeacherProfile?
   parentProfile  ParentProfile?
 
@@ -583,4 +590,18 @@ model RoomPresence {
   @@unique([sessionId, userId])
   @@index([userId, status])
   @@index([sessionId, status])
+}
+// ========== REFERRALS ==========
+model ReferralReward {
+  id           String   @id @default(cuid())
+  inviterId    String
+  inviter      User     @relation("RewardInviter", fields: [inviterId], references: [id], onDelete: Cascade)
+  invitedId    String
+  invited      User     @relation("RewardInvited", fields: [invitedId], references: [id], onDelete: Cascade)
+  minutesGiven Int      @default(10)
+  signupIp     String?
+  createdAt    DateTime @default(now())
+
+  @@unique([invitedId])
+  @@index([inviterId, createdAt])
 }

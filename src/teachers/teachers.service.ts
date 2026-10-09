@@ -213,17 +213,17 @@ export class TeachersService {
     });
 
     if (!profile) {
-      throw new Error('No application found');
+      throw new BadRequestException('No application found');
     }
     if (profile.applicationStatus !== 'DRAFT') {
-      throw new Error('Application already submitted');
+      throw new BadRequestException('Application already submitted');
     }
     if (!profile.idDocumentUrl) {
-      throw new Error('ID document is required before submitting');
+      throw new BadRequestException('ID document is required before submitting');
     }
     const hasCertificate = profile.teacherLanguages.some((tl) => tl.certificates.length > 0);
     if (!hasCertificate) {
-      throw new Error('At least one certificate is required before submitting');
+      throw new BadRequestException('At least one certificate is required before submitting');
     }
 
     return this.prisma.teacherProfile.update({
@@ -248,7 +248,8 @@ export class TeachersService {
       },
     });
   }
-    async addEducation(userId: string, dto: {
+
+  async addEducation(userId: string, dto: {
     university: string;
     degree: string;
     degreeType?: string;
@@ -285,7 +286,8 @@ export class TeachersService {
       data: { requestedHourlyRateDA },
     });
   }
-    async findPublicTeachers(query: {
+
+  async findPublicTeachers(query: {
     languageId?: string;
     online?: boolean;
     serviceType?: string;
@@ -387,7 +389,8 @@ export class TeachersService {
       select: { id: true, isOnline: true },
     });
   }
-    async getMyProfile(userId: string) {
+
+  async getMyProfile(userId: string) {
     const profile = await this.prisma.teacherProfile.findUnique({
       where: { userId },
       include: {
@@ -477,13 +480,13 @@ export class TeachersService {
         monthTeachingSec: monthSec._sum.durationSec ?? 0,
       },
       upcomingBookings: upcomingBookings.map((b) => ({
-  id: b.id,
-  scheduledAt: b.scheduledAt,
-  durationMin: b.durationMin,
-  serviceType: b.serviceType,
-  studentName: b.student.user.fullName,
-  status: b.status,
-})),
+        id: b.id,
+        scheduledAt: b.scheduledAt,
+        durationMin: b.durationMin,
+        serviceType: b.serviceType,
+        studentName: b.student.user.fullName,
+        status: b.status,
+      })),
       recentCalls: recentCalls.map((c) => ({
         id: c.id,
         startTime: c.startTime,
@@ -491,6 +494,92 @@ export class TeachersService {
         serviceType: c.serviceType,
         studentName: c.student.user.fullName,
       })),
+    };
+  }
+
+  async getTeachingTimeBreakdown(userId: string) {
+    const profile = await this.prisma.teacherProfile.findUnique({
+      where: { userId },
+      select: { id: true },
+    });
+    if (!profile) throw new NotFoundException('Profile not found');
+
+    const now = new Date();
+
+    const startOfWeek = new Date(now);
+    const dow = now.getDay();
+    const diffToMon = dow === 0 ? -6 : 1 - dow;
+    startOfWeek.setDate(now.getDate() + diffToMon);
+    startOfWeek.setHours(0, 0, 0, 0);
+
+    const startOfMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+
+    const startOf30 = new Date(now);
+    startOf30.setDate(now.getDate() - 29);
+    startOf30.setHours(0, 0, 0, 0);
+
+    const EARNED_TYPES = ['LESSON_COMPLETED'] as const;
+
+    const [allTimeAgg, weekAgg, monthAgg, last30, ledgerEntries] = await Promise.all([
+      this.prisma.teachingTimeLedger.aggregate({
+        where: { teacherId: profile.id, type: { in: [...EARNED_TYPES] } },
+        _sum: { seconds: true },
+      }),
+      this.prisma.teachingTimeLedger.aggregate({
+        where: {
+          teacherId: profile.id,
+          type: { in: [...EARNED_TYPES] },
+          createdAt: { gte: startOfWeek },
+        },
+        _sum: { seconds: true },
+      }),
+      this.prisma.teachingTimeLedger.aggregate({
+        where: {
+          teacherId: profile.id,
+          type: { in: [...EARNED_TYPES] },
+          createdAt: { gte: startOfMonth },
+        },
+        _sum: { seconds: true },
+      }),
+      this.prisma.teachingTimeLedger.findMany({
+        where: {
+          teacherId: profile.id,
+          type: { in: [...EARNED_TYPES] },
+          createdAt: { gte: startOf30 },
+        },
+        select: { seconds: true, createdAt: true },
+        orderBy: { createdAt: 'asc' },
+      }),
+      this.prisma.teachingTimeLedger.findMany({
+        where: { teacherId: profile.id },
+        orderBy: { createdAt: 'desc' },
+        take: 20,
+      }),
+    ]);
+
+    const buckets: Record<string, number> = {};
+    for (let i = 0; i < 30; i++) {
+      const d = new Date(startOf30);
+      d.setDate(startOf30.getDate() + i);
+      const key = d.toISOString().slice(0, 10);
+      buckets[key] = 0;
+    }
+    for (const e of last30) {
+      const key = new Date(e.createdAt).toISOString().slice(0, 10);
+      if (key in buckets) buckets[key] += e.seconds;
+    }
+
+    const dailyList = Object.entries(buckets).map(([date, seconds]) => ({
+      date,
+      seconds,
+    }));
+
+    return {
+      allTimeSec: allTimeAgg._sum.seconds ?? 0,
+      weekSec: weekAgg._sum.seconds ?? 0,
+      monthSec: monthAgg._sum.seconds ?? 0,
+      dailyLast30: dailyList,
+      ledger: ledgerEntries,
     };
   }
 }

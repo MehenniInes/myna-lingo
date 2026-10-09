@@ -174,13 +174,25 @@ export class CallsService {
       };
     });
   }
-
-  async getActiveCall(userId: string) {
+    async getActiveCall(userId: string) {
     const student = await this.prisma.studentProfile.findUnique({ where: { userId } });
     if (!student) return null;
     return this.prisma.call.findFirst({
       where: { studentId: student.id, status: 'ACTIVE' },
       include: { teacher: { include: { user: { select: { fullName: true } } } } },
+    });
+  }
+
+   async getActiveCallForTeacher(userId: string) {
+    const teacher = await this.prisma.teacherProfile.findUnique({ where: { userId } });
+    if (!teacher) return null;
+
+    return this.prisma.call.findFirst({
+      where: { teacherId: teacher.id, status: 'ACTIVE' },
+      include: {
+        student: { include: { user: { select: { fullName: true } } } },
+      },
+      orderBy: { startTime: 'desc' },
     });
   }
 
@@ -260,25 +272,4 @@ export class CallsService {
     }
   }
     // Teacher polls this to see if any student is calling them
-  async getActiveCallForTeacher(userId: string) {
-    const teacher = await this.prisma.teacherProfile.findUnique({
-      where: { userId },
-    });
-    if (!teacher) return null;
-
-    return this.prisma.call.findFirst({
-      where: {
-        teacherId: teacher.id,
-        status: 'ACTIVE',
-      },
-      include: {
-        student: {
-          include: {
-            user: { select: { fullName: true, email: true } },
-          },
-        },
-      },
-      orderBy: { startTime: 'desc' },
-    });
-  }
 }

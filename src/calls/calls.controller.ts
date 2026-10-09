@@ -25,7 +25,7 @@ export class CallsController {
     return this.callsService.getActiveCall(req.user.userId);
   }
 
-    @Get('active-for-teacher')
+  @Get('active-for-teacher')
   getActiveForTeacher(@Req() req: any) {
     return this.callsService.getActiveCallForTeacher(req.user.userId);
   }
@@ -34,7 +34,7 @@ export class CallsController {
   getMyCalls(@Req() req: any) {
     return this.callsService.getMyCalls(req.user.userId);
   }
-  
+
   @Get('balance')
   getBalance(@Req() req: any) {
     return this.callsService.getBalance(req.user.userId);

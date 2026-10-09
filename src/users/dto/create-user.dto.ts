@@ -1,4 +1,4 @@
-import { IsEmail, IsString, MinLength, IsIn } from 'class-validator';
+import { IsEmail, IsString, MinLength, IsIn, IsOptional } from 'class-validator';
 
 export class CreateUserDto {
   @IsEmail()
@@ -13,4 +13,8 @@ export class CreateUserDto {
 
   @IsIn(['STUDENT', 'PARENT', 'TEACHER', 'ADMIN'])
   role: 'STUDENT' | 'PARENT' | 'TEACHER' | 'ADMIN';
+
+  @IsOptional()
+  @IsString()
+  refCode?: string;
 }
