@@ -1,0 +1,14 @@
+warning: in the working copy of 'package.json', LF will be replaced by CRLF the next time Git touches it
+[1mdiff --git a/package.json b/package.json[m
+[1mindex 3639f31..8ba0179 100644[m
+[1m--- a/package.json[m
+[1m+++ b/package.json[m
+[36m@@ -64,7 +64,6 @@[m
+     "supertest": "^7.0.0",[m
+     "typescript": "^6.0.2",[m
+     "vite-tsconfig-paths": "^5.1.4",[m
+[31m-    "vitest": "^4.1.2",[m
+[31m-    "postinstall": "prisma generate"[m
+[32m+[m[32m    "vitest": "^4.1.2"[m
+   }[m
+ }[m
