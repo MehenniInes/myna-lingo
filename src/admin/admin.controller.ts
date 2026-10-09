@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Patch, Delete, Param, Body, UseGuards, Query } from '@nestjs/common';
+import { Body, Controller, Get, Post, Patch, Delete, Param, Query, Req, UseGuards } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { AdminService } from './admin.service.js';
 import { RolesGuard } from '../auth/roles.guard.js';
@@ -10,6 +10,7 @@ import { Roles } from '../auth/roles.decorator.js';
 export class AdminController {
   constructor(private adminService: AdminService) {}
 
+  // ---------- Stats ----------
   @Get('stats')
   getStats() {
     return this.adminService.getStats();
@@ -20,7 +21,69 @@ export class AdminController {
     return this.adminService.getAnalytics();
   }
 
-  // Packages
+  // ---------- Pricing rules ----------
+  @Get('pricing')
+  listPricing() {
+    return this.adminService.listPricingRules();
+  }
+
+  @Patch('pricing/:id')
+  updatePricing(@Param('id') id: string, @Body() body: any, @Req() req: any) {
+    return this.adminService.updatePricingRule(id, req.user.userId, body);
+  }
+
+  // ---------- Agora call monitoring ----------
+  @Get('calls')
+  listCalls(
+    @Query('status') status?: string,
+    @Query('limit') limit?: string,
+  ) {
+    const parsed = limit ? parseInt(limit, 10) : undefined;
+    return this.adminService.listCalls({
+      status,
+      limit: Number.isFinite(parsed) ? parsed : undefined,
+    });
+  }
+
+  @Get('calls/stats')
+  getCallStats() {
+    return this.adminService.getCallStats();
+  }
+
+  // ---------- Teachers ----------
+  @Get('teachers')
+  listTeachers(
+    @Query('search') search?: string,
+    @Query('status') status?: string,
+  ) {
+    return this.adminService.listTeachers({ search, status });
+  }
+
+  @Patch('teachers/:id/suspend')
+  suspendTeacher(@Param('id') id: string, @Req() req: any) {
+    return this.adminService.suspendTeacher(id, req.user.userId);
+  }
+
+  @Patch('teachers/:id/reactivate')
+  reactivateTeacher(@Param('id') id: string, @Req() req: any) {
+    return this.adminService.reactivateTeacher(id, req.user.userId);
+  }
+
+  // ---------- Teacher internal rates (private) ----------
+  @Get('teacher-rates')
+  listTeacherRates() {
+    return this.adminService.listTeacherRates();
+  }
+
+  @Patch('teacher-rates/:id')
+  setTeacherRate(
+    @Param('id') id: string,
+    @Body() body: { internalHourlyRateDA: number | null },
+  ) {
+    return this.adminService.setTeacherRate(id, body.internalHourlyRateDA);
+  }
+
+  // ---------- Packages ----------
   @Get('packages')
   getAllPackages() {
     return this.adminService.getAllPackages();
@@ -41,7 +104,7 @@ export class AdminController {
     return this.adminService.deletePackage(id);
   }
 
-  // Podcasts
+  // ---------- Podcasts ----------
   @Get('podcasts')
   getAllPodcasts() {
     return this.adminService.getAllPodcasts();
@@ -62,7 +125,7 @@ export class AdminController {
     return this.adminService.deletePodcast(id);
   }
 
-  // Users
+  // ---------- Users ----------
   @Get('users')
   getAllUsers(
     @Query('role') role?: string,
@@ -71,7 +134,6 @@ export class AdminController {
     return this.adminService.getAllUsers(role, filter);
   }
 
-  // ⚠️ MUST be BEFORE @Get('users/:id') — even though we don't have that, keep it here
   @Get('users/pending')
   getPendingStudents() {
     return this.adminService.getPendingStudents();
@@ -100,7 +162,7 @@ export class AdminController {
     return this.adminService.toggleUserActive(id);
   }
 
-  // Activities
+  // ---------- Activities ----------
   @Get('activities')
   getAllActivities() {
     return this.adminService.getAllActivities();

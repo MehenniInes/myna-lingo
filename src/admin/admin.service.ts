@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
 
 @Injectable()
@@ -240,5 +240,233 @@ export class AdminService {
     const a = await this.prisma.learningActivity.findUnique({ where: { id } });
     if (!a) throw new NotFoundException('Activity not found');
     return this.prisma.learningActivity.update({ where: { id }, data: { isActive: false } });
+  }
+     async listTeachers(params: { search?: string; status?: string }) {
+    const where: any = {};
+
+    if (params.status && params.status !== 'ALL') {
+      where.applicationStatus = params.status;
+    }
+
+    if (params.search) {
+      where.OR = [
+        { firstName: { contains: params.search, mode: 'insensitive' } },
+        { lastName: { contains: params.search, mode: 'insensitive' } },
+        { user: { fullName: { contains: params.search, mode: 'insensitive' } } },
+        { user: { email: { contains: params.search, mode: 'insensitive' } } },
+      ];
+    }
+
+    return this.prisma.teacherProfile.findMany({
+      where,
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        countryOfBirth: true,
+        profilePhotoUrl: true,
+        isOnline: true,
+        experienceYears: true,
+        applicationStatus: true,
+        requestedHourlyRateDA: true,
+        user: {
+          select: {
+            email: true,
+            fullName: true,
+            isActive: true,
+            createdAt: true,
+          },
+        },
+        _count: { select: { teacherLanguages: true, calls: true } },
+      },
+      orderBy: { user: { createdAt: 'desc' } },
+      take: 500,
+    });
+  }
+
+  async suspendTeacher(teacherId: string, adminUserId: string) {
+    const teacher = await this.prisma.teacherProfile.findUnique({
+      where: { id: teacherId },
+    });
+    if (!teacher) throw new NotFoundException('Teacher not found');
+
+    return this.prisma.teacherProfile.update({
+      where: { id: teacherId },
+      data: {
+        applicationStatus: 'SUSPENDED',
+        isOnline: false,
+        reviewedBy: adminUserId,
+        reviewedAt: new Date(),
+        reviewNote: 'Suspended by admin',
+      },
+    });
+  }
+
+  async reactivateTeacher(teacherId: string, adminUserId: string) {
+    const teacher = await this.prisma.teacherProfile.findUnique({
+      where: { id: teacherId },
+    });
+    if (!teacher) throw new NotFoundException('Teacher not found');
+
+    return this.prisma.teacherProfile.update({
+      where: { id: teacherId },
+      data: {
+        applicationStatus: 'APPROVED',
+        reviewedBy: adminUserId,
+        reviewedAt: new Date(),
+        reviewNote: 'Reactivated by admin',
+      },
+    });
+  }
+    async listPricingRules() {
+    return this.prisma.pricingRule.findMany({
+      orderBy: { key: 'asc' },
+    });
+  }
+
+  async updatePricingRule(
+    id: string,
+    adminUserId: string,
+    data: { label?: string; pricePerMinuteDA?: number; isActive?: boolean },
+  ) {
+    const rule = await this.prisma.pricingRule.findUnique({ where: { id } });
+    if (!rule) throw new NotFoundException('Pricing rule not found');
+
+    return this.prisma.pricingRule.update({
+      where: { id },
+      data: {
+        ...(data.label !== undefined ? { label: data.label } : {}),
+        ...(data.pricePerMinuteDA !== undefined
+          ? { pricePerMinuteDA: data.pricePerMinuteDA }
+          : {}),
+        ...(data.isActive !== undefined ? { isActive: data.isActive } : {}),
+        updatedBy: adminUserId,
+      },
+    });
+  }
+    async listTeacherRates() {
+    return this.prisma.teacherProfile.findMany({
+      where: { applicationStatus: 'APPROVED' },
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        profilePhotoUrl: true,
+        requestedHourlyRateDA: true,
+        internalHourlyRateDA: true,
+        user: { select: { email: true, fullName: true } },
+        _count: { select: { calls: true } },
+      },
+      orderBy: [{ internalHourlyRateDA: 'asc' }, { firstName: 'asc' }],
+      take: 500,
+    });
+  }
+
+  async setTeacherRate(
+    teacherId: string,
+    internalHourlyRateDA: number | null,
+  ) {
+    const teacher = await this.prisma.teacherProfile.findUnique({
+      where: { id: teacherId },
+    });
+    if (!teacher) throw new NotFoundException('Teacher not found');
+
+    if (internalHourlyRateDA !== null) {
+      if (!Number.isFinite(internalHourlyRateDA) || internalHourlyRateDA < 0) {
+        throw new BadRequestException('Invalid rate');
+      }
+    }
+
+    return this.prisma.teacherProfile.update({
+      where: { id: teacherId },
+      data: { internalHourlyRateDA },
+      select: {
+        id: true,
+        firstName: true,
+        lastName: true,
+        internalHourlyRateDA: true,
+      },
+    });
+  }
+      async listCalls(params: { status?: string; limit?: number }) {
+    const where: any = {};
+    if (params.status && params.status !== 'ALL') {
+      where.status = params.status;
+    }
+
+    const take = Math.min(Math.max(params.limit ?? 100, 1), 500);
+
+    return this.prisma.call.findMany({
+      where,
+      select: {
+        id: true,
+        startTime: true,
+        endTime: true,
+        durationSec: true,
+        status: true,
+        serviceType: true,
+        agoraChannelId: true,
+        student: {
+          select: {
+            id: true,
+            user: { select: { fullName: true, email: true } },
+          },
+        },
+        teacher: {
+          select: {
+            id: true,
+            firstName: true,
+            lastName: true,
+            user: { select: { fullName: true, email: true } },
+          },
+        },
+      },
+      orderBy: { startTime: 'desc' },
+      take,
+    });
+  }
+
+  async getCallStats() {
+    const now = new Date();
+    const startOfDay = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const startOfWeek = new Date(now);
+    const dow = now.getDay();
+    startOfWeek.setDate(now.getDate() + (dow === 0 ? -6 : 1 - dow));
+    startOfWeek.setHours(0, 0, 0, 0);
+
+    const [activeCount, todayAgg, weekAgg, totalAgg] = await Promise.all([
+      this.prisma.call.count({ where: { status: 'ACTIVE' } }),
+      this.prisma.call.aggregate({
+        where: { status: 'COMPLETED', startTime: { gte: startOfDay } },
+        _sum: { durationSec: true },
+        _count: true,
+      }),
+      this.prisma.call.aggregate({
+        where: { status: 'COMPLETED', startTime: { gte: startOfWeek } },
+        _sum: { durationSec: true },
+        _count: true,
+      }),
+      this.prisma.call.aggregate({
+        where: { status: 'COMPLETED' },
+        _sum: { durationSec: true },
+        _count: true,
+      }),
+    ]);
+
+    return {
+      activeCalls: activeCount,
+      today: {
+        calls: todayAgg._count,
+        seconds: todayAgg._sum.durationSec ?? 0,
+      },
+      week: {
+        calls: weekAgg._count,
+        seconds: weekAgg._sum.durationSec ?? 0,
+      },
+      total: {
+        calls: totalAgg._count,
+        seconds: totalAgg._sum.durationSec ?? 0,
+      },
+    };
   }
 }
