@@ -370,6 +370,7 @@ export class TeachersService {
       reviewedBy,
       reviewedAt,
       userId,
+      internalHourlyRateDA,
       ...publicData
     } = teacher;
 

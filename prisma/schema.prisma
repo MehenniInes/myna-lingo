@@ -196,10 +196,13 @@ model TeacherProfile {
   idDocumentUrl     String?
   availability          Json?
   requestedHourlyRateDA Int?
+  internalHourlyRateDA  Int?
   applicationStatus ApplicationStatus @default(DRAFT)
   reviewedBy        String?
   reviewedAt        DateTime?
   reviewNote        String?
+  
+  
 
   teacherLanguages TeacherLanguage[]
   spokenLanguages  SpokenLanguage[]
