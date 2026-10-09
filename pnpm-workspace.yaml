@@ -1,10 +1,10 @@
 packages:
   - '.'
 
-allowBuilds:
-  '@prisma/engines': true
-  bcrypt: true
-  prisma: true
+onlyBuiltDependencies:
+  - '@prisma/engines'
+  - bcrypt
+  - prisma
 
 overrides:
   ora: 5.4.1
