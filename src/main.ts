@@ -6,7 +6,9 @@ import { join } from 'path';
 import { AppModule } from './app.module.js';
 
 async function bootstrap() {
-  const app = await NestFactory.create<NestExpressApplication>(AppModule);
+ const app = await NestFactory.create<NestExpressApplication>(AppModule, {
+  rawBody: true,
+});
 
   // Static files (uploads)
   app.useStaticAssets(join(process.cwd(), 'uploads'), { prefix: '/uploads' });
@@ -15,7 +17,7 @@ async function bootstrap() {
   app.enableCors({
     origin: [
       'http://localhost:3000',
-      'http://localhost:3001',
+      'http://localhost:4000',
       // ⚠️ Add your Vercel URL here after deploying frontend:
       // 'https://myna-lingo.vercel.app',
     ],
@@ -28,7 +30,7 @@ async function bootstrap() {
   );
 
   // Port: Railway assigns via PORT env, local fallback 3001
-  const port = Number(process.env.PORT) || 3001;
+  const port = Number(process.env.PORT) || 4000;
 
   // 0.0.0.0 = accept external connections (required for Railway/Docker)
   await app.listen(port, '0.0.0.0');

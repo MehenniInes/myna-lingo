@@ -65,7 +65,46 @@ enum LedgerTransactionType {
   ADMIN_ADJUSTMENT
   REFUND
 }
+enum CheckoutStatus {
+  PENDING
+  SUCCESS
+  FAILED
+  CANCELLED
+  REFUNDED
+}
 
+enum PaymentProduct {
+  PACKAGE
+  PODCAST
+}
+
+model Payment {
+  id              String          @id @default(cuid())
+  userId          String
+  user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  productType     PaymentProduct
+  referenceId     String           // Package.id or Podcast.id
+  referenceLabel  String?          // snapshot: "60 minutes package"
+  
+  amountDA        Int              // in DZD (Chargily wants integer)
+  currency        String           @default("dzd")
+
+    status          CheckoutStatus    @default(PENDING)
+
+  // Chargily metadata
+  chargilyCheckoutId  String?      @unique
+  chargilyCheckoutUrl String?
+  chargilyWebhookPayload Json?     // raw webhook body for audit
+
+  // Audit
+  paidAt          DateTime?
+  createdAt       DateTime         @default(now())
+  updatedAt       DateTime         @updatedAt
+
+  @@index([userId, status])
+  @@index([chargilyCheckoutId])
+}
 enum ApplicationStatus {
   DRAFT
   PENDING_REVIEW
@@ -163,6 +202,7 @@ model User {
   xpTransactions   XPTransaction[]
   notifications    Notification[]
   roomPresence     RoomPresence[]
+    payments Payment[]
 
   @@index([role])
 }
