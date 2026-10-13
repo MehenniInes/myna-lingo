@@ -583,11 +583,23 @@ model Call {
   durationSec    Int            @default(0)
   status         CallStatus     @default(ACTIVE)
   createdAt      DateTime       @default(now())
+  eventLogs      CallEventLog[]
 
   @@index([studentId, status])
   @@index([teacherId, status])
 }
 
+model CallEventLog {
+  id        String   @id @default(cuid())
+  callId    String
+  call      Call     @relation(fields: [callId], references: [id], onDelete: Cascade)
+  actorId   String?
+  action    String
+  payload   Json?
+  createdAt DateTime @default(now())
+
+  @@index([callId, createdAt])
+}
 model TeachingTimeLedger {
   id           String            @id @default(cuid())
   teacherId    String

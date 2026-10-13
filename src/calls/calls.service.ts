@@ -1,11 +1,11 @@
 import {
   Injectable, NotFoundException, BadRequestException, ForbiddenException,
 } from '@nestjs/common';
-import { Cron } from '@nestjs/schedule';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { NotificationsService } from '../notifications/notifications.service.js';
 import agoraToken from 'agora-token';
 const { RtcTokenBuilder, RtcRole } = agoraToken;
+
 
 @Injectable()
 export class CallsService {
@@ -26,19 +26,11 @@ export class CallsService {
     if (!appId || !appCertificate) {
       throw new BadRequestException('Agora credentials are not configured');
     }
-
-    const expirationInSeconds = 3600; // 1 hour
     const currentTimestamp = Math.floor(Date.now() / 1000);
-    const privilegeExpireTime = currentTimestamp + expirationInSeconds;
-
+    const privilegeExpireTime = currentTimestamp + 3600;
     return RtcTokenBuilder.buildTokenWithUid(
-      appId,
-      appCertificate,
-      channelName,
-      uid,
-      RtcRole.PUBLISHER,
-      privilegeExpireTime,
-      privilegeExpireTime,
+      appId, appCertificate, channelName, uid, RtcRole.PUBLISHER,
+      privilegeExpireTime, privilegeExpireTime,
     );
   }
 
@@ -104,41 +96,58 @@ export class CallsService {
     };
   }
 
+  // ---------- Settlement (shared) ----------
+
   async endCall(userId: string, callId: string) {
     const call = await this.prisma.call.findUnique({ where: { id: callId } });
     if (!call) throw new NotFoundException('Call not found');
-    if (call.status !== 'ACTIVE') throw new BadRequestException('Call is not active');
 
     const student = await this.prisma.studentProfile.findUnique({ where: { userId } });
     if (!student || student.id !== call.studentId) {
       throw new ForbiddenException('This is not your call');
     }
+    return this.settleCallInternal(callId);
+  }
+
+  /**
+   * Called by the gateway. Skips ownership check (server-authoritative end).
+   * overrideDurationSec lets the gateway pass the "effective" duration
+   * (wall clock minus pauses) instead of recomputing from startTime.
+   */
+  async endCallById(callId: string, overrideDurationSec?: number) {
+    return this.settleCallInternal(callId, overrideDurationSec);
+  }
+
+  private async settleCallInternal(callId: string, overrideDurationSec?: number) {
+    const call = await this.prisma.call.findUnique({ where: { id: callId } });
+    if (!call) throw new NotFoundException('Call not found');
+    if (call.status !== 'ACTIVE') {
+      throw new BadRequestException('Call is not active');
+    }
 
     const endTime = new Date();
-    const rawDurationSec = Math.max(
-      0,
-      Math.floor((endTime.getTime() - call.startTime.getTime()) / 1000),
-    );
+    const rawDurationSec =
+      overrideDurationSec ??
+      Math.max(0, Math.floor((endTime.getTime() - new Date(call.startTime).getTime()) / 1000));
 
     return this.prisma.$transaction(async (tx) => {
       const lastStudentEntry = await tx.minuteLedgerEntry.findFirst({
-        where: { studentId: student.id },
+        where: { studentId: call.studentId },
         orderBy: { createdAt: 'desc' },
       });
       const currentStudentBalance = lastStudentEntry?.balanceAfter ?? 0;
 
-      // Clamp — no overage allowed. If the call ran longer than the balance,
-      // we only bill what the student actually had.
+      // Clamp to balance — no overage
       const billedSec = Math.min(rawDurationSec, currentStudentBalance);
       const newStudentBalance = currentStudentBalance - billedSec;
 
       await tx.minuteLedgerEntry.create({
         data: {
-          studentId: student.id,
+          studentId: call.studentId,
           type: 'CALL_USAGE',
           seconds: -billedSec,
           balanceAfter: newStudentBalance,
-          referenceId: callId,
+          referenceId: call.id,
           note: `Call: ${Math.floor(billedSec / 60)}m ${billedSec % 60}s`,
         },
       });
@@ -155,7 +164,7 @@ export class CallsService {
           type: 'LESSON_COMPLETED',
           seconds: billedSec,
           balanceAfter: currentTeacherBalance + billedSec,
-          referenceId: callId,
+          referenceId: call.id,
           note: `Lesson completed`,
         },
       });
@@ -174,7 +183,55 @@ export class CallsService {
       };
     });
   }
-    async getActiveCall(userId: string) {
+
+  // ---------- Lookups for the gateway ----------
+
+  async getCallParticipants(callId: string) {
+    const call = await this.prisma.call.findUnique({
+      where: { id: callId },
+      include: {
+        student: { include: { user: { select: { id: true, fullName: true } } } },
+        teacher: { include: { user: { select: { id: true, fullName: true } } } },
+      },
+    });
+    if (!call) return null;
+    return {
+      callId: call.id,
+      status: call.status,
+      studentId: call.studentId,
+      studentUserId: call.student.user.id,
+      teacherId: call.teacherId,
+      teacherUserId: call.teacher.user.id,
+      serviceType: call.serviceType,
+      startTime: call.startTime,
+    };
+  }
+
+  async getStudentBalanceSecondsPublic(studentProfileId: string) {
+    return this.getStudentBalanceSeconds(studentProfileId);
+  }
+
+  // ---------- Audit log ----------
+
+  async logCallEvent(
+    callId: string,
+    actorId: string | null,
+    action: string,
+    payload?: any,
+  ) {
+    try {
+      await this.prisma.callEventLog.create({
+        data: { callId, actorId, action, payload: payload ?? undefined },
+      });
+    } catch (err: any) {
+      // Never let logging break the call
+      console.warn(`CallEventLog write failed: ${err.message}`);
+    }
+  }
+
+  // ---------- Existing helpers ----------
+
+  async getActiveCall(userId: string) {
     const student = await this.prisma.studentProfile.findUnique({ where: { userId } });
     if (!student) return null;
     return this.prisma.call.findFirst({
@@ -183,17 +240,43 @@ export class CallsService {
     });
   }
 
-   async getActiveCallForTeacher(userId: string) {
+  async getActiveCallForTeacher(userId: string) {
     const teacher = await this.prisma.teacherProfile.findUnique({ where: { userId } });
     if (!teacher) return null;
-
     return this.prisma.call.findFirst({
       where: { teacherId: teacher.id, status: 'ACTIVE' },
-      include: {
-        student: { include: { user: { select: { fullName: true } } } },
-      },
+      include: { student: { include: { user: { select: { fullName: true } } } } },
       orderBy: { startTime: 'desc' },
     });
+  }
+
+  async getCallForTeacher(userId: string, callId: string) {
+    const teacher = await this.prisma.teacherProfile.findUnique({ where: { userId } });
+    if (!teacher) throw new BadRequestException('User is not a teacher');
+
+    const call = await this.prisma.call.findUnique({
+      where: { id: callId },
+      include: { student: { include: { user: { select: { fullName: true } } } } },
+    });
+    if (!call) throw new NotFoundException('Call not found');
+    if (call.teacherId !== teacher.id) {
+      throw new ForbiddenException('This is not your call');
+    }
+    if (!call.agoraChannelId) {
+      throw new BadRequestException('Call has no Agora channel');
+    }
+
+    const teacherUid = 2;
+    return {
+      callId: call.id,
+      status: call.status,
+      channelName: call.agoraChannelId,
+      appId: process.env.AGORA_APP_ID,
+      teacherUid,
+      teacherToken: this.buildAgoraToken(call.agoraChannelId, teacherUid),
+      studentName: call.student.user.fullName,
+      startTime: call.startTime,
+    };
   }
 
   async getMyCalls(userId: string) {
@@ -210,7 +293,6 @@ export class CallsService {
   async getBalance(userId: string) {
     const student = await this.prisma.studentProfile.findUnique({ where: { userId } });
     if (!student) throw new BadRequestException('User is not a student');
-
     const seconds = await this.getStudentBalanceSeconds(student.id);
     const mins = Math.floor(seconds / 60);
     const secs = seconds % 60;
@@ -219,57 +301,4 @@ export class CallsService {
       formatted: `${mins}:${secs.toString().padStart(2, '0')}`,
     };
   }
-    async getCallForTeacher(userId: string, callId: string) {
-    const teacher = await this.prisma.teacherProfile.findUnique({ where: { userId } });
-    if (!teacher) throw new BadRequestException('User is not a teacher');
-
-    const call = await this.prisma.call.findUnique({
-      where: { id: callId },
-      include: {
-        student: { include: { user: { select: { fullName: true } } } },
-      },
-    });
-    if (!call) throw new NotFoundException('Call not found');
-    if (call.teacherId !== teacher.id) {
-      throw new ForbiddenException('This is not your call');
-    }
-    if (!call.agoraChannelId) {
-      throw new BadRequestException('Call has no Agora channel');
-    }
-
-    const teacherUid = 2;
-
-    return {
-      callId: call.id,
-      status: call.status,
-      channelName: call.agoraChannelId,
-      appId: process.env.AGORA_APP_ID,
-      teacherUid,
-      teacherToken: this.buildAgoraToken(call.agoraChannelId, teacherUid),
-      studentName: call.student.user.fullName,
-      startTime: call.startTime,
-    };
-  }
-
-  
-  // Auto-end calls that have been active for more than 2 hours
-  // (protects against abandoned tabs, disconnected users, etc.)
-  @Cron('0 */5 * * * *') // every 5 minutes
-  async autoEndStaleCalls() {
-    const cutoff = new Date(Date.now() - 2 * 60 * 60 * 1000); // 2 hours ago
-    const result = await this.prisma.call.updateMany({
-      where: {
-        status: 'ACTIVE',
-        startTime: { lt: cutoff },
-      },
-      data: {
-        status: 'CANCELLED',
-        endTime: new Date(),
-      },
-    });
-    if (result.count > 0) {
-      console.log(`[Cron] Auto-ended ${result.count} stale call(s)`);
-    }
-  }
-    // Teacher polls this to see if any student is calling them
 }
