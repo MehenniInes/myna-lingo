@@ -1,7 +1,8 @@
-import { Injectable, ConflictException, BadRequestException, NotFoundException } from '@nestjs/common';
+import { Injectable, ConflictException, BadRequestException, NotFoundException, ForbiddenException, } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { ApplyDto } from './dto/apply.dto.js';
 
+  
 @Injectable()
 export class TeachersService {
   constructor(private prisma: PrismaService) {}
@@ -583,5 +584,75 @@ export class TeachersService {
       dailyLast30: dailyList,
       ledger: ledgerEntries,
     };
+  }
+    // ---------- Teacher videos ----------
+
+  async listMyVideos(userId: string) {
+    const profile = await this.prisma.teacherProfile.findUnique({
+      where: { userId },
+      select: { id: true },
+    });
+    if (!profile) throw new NotFoundException('Profile not found');
+
+    return this.prisma.teacherVideo.findMany({
+      where: { teacherId: profile.id },
+      orderBy: { uploadedAt: 'desc' },
+    });
+  }
+
+  async listPublicVideos(teacherId: string) {
+    return this.prisma.teacherVideo.findMany({
+      where: { teacherId },
+      orderBy: { uploadedAt: 'desc' },
+      select: { id: true, url: true, title: true, uploadedAt: true },
+    });
+  }
+
+  async addVideo(
+    userId: string,
+    data: { url: string; title?: string; sizeBytes?: number; mimeType?: string },
+  ) {
+    const profile = await this.prisma.teacherProfile.findUnique({
+      where: { userId },
+      select: { id: true },
+    });
+    if (!profile) throw new BadRequestException('Profile not found');
+
+    // Cap at 10 videos per teacher — keep it sane
+    const count = await this.prisma.teacherVideo.count({
+      where: { teacherId: profile.id },
+    });
+    if (count >= 10) {
+      throw new BadRequestException('Maximum 10 videos per profile');
+    }
+
+    return this.prisma.teacherVideo.create({
+      data: {
+        teacherId: profile.id,
+        url: data.url,
+        title: data.title?.trim() || null,
+        sizeBytes: data.sizeBytes ?? null,
+        mimeType: data.mimeType ?? null,
+      },
+    });
+  }
+
+  async deleteVideo(userId: string, videoId: string) {
+    const profile = await this.prisma.teacherProfile.findUnique({
+      where: { userId },
+      select: { id: true },
+    });
+    if (!profile) throw new NotFoundException('Profile not found');
+
+    const video = await this.prisma.teacherVideo.findUnique({
+      where: { id: videoId },
+    });
+    if (!video) throw new NotFoundException('Video not found');
+    if (video.teacherId !== profile.id) {
+      throw new ForbiddenException('This is not your video');
+    }
+
+    await this.prisma.teacherVideo.delete({ where: { id: videoId } });
+    return { ok: true };
   }
 }

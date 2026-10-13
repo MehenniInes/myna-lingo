@@ -2,6 +2,7 @@ import {
   BadRequestException,
   Body,
   Controller,
+  Delete,
   Get,
   Param,
   Patch,
@@ -554,6 +555,59 @@ export class TeachersController {
       body.isOnline,
     );
   }
+    // ---------- Teacher videos ----------
+
+  @Get('me/videos')
+  @UseGuards(AuthGuard('jwt'), HasTeacherProfileGuard)
+  async listMyVideos(@Req() req: any) {
+    return this.teachersService.listMyVideos(req.user.userId);
+  }
+
+  @Post('me/videos')
+  @UseGuards(AuthGuard('jwt'), HasTeacherProfileGuard)
+  async addVideo(@Req() req: any, @Body() dto: { url: string; title?: string; sizeBytes?: number; mimeType?: string }) {
+    return this.teachersService.addVideo(req.user.userId, dto);
+  }
+
+  @Delete('me/videos/:videoId')
+  @UseGuards(AuthGuard('jwt'), HasTeacherProfileGuard)
+  async deleteVideo(@Req() req: any, @Param('videoId') videoId: string) {
+    return this.teachersService.deleteVideo(req.user.userId, videoId);
+  }
+
+  @Post('upload/video')
+  @UseGuards(AuthGuard('jwt'), HasTeacherProfileGuard)
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: diskStorage({
+        destination: './uploads/videos',
+        filename: (req, file, cb) => {
+          const unique = Date.now() + '-' + Math.round(Math.random() * 1e9);
+          cb(null, unique + extname(file.originalname));
+        },
+      }),
+      limits: { fileSize: 100 * 1024 * 1024 }, // 100 MB
+      fileFilter: (req, file, cb) => {
+        const allowed = ['video/mp4', 'video/webm'];
+        if (!allowed.includes(file.mimetype)) {
+          return cb(new BadRequestException('Only MP4 or WebM videos are allowed'), false);
+        }
+        cb(null, true);
+      },
+    }),
+  )
+  uploadVideo(@UploadedFile() file: Express.Multer.File) {
+    return {
+      url: `${process.env.BACKEND_URL || 'http://localhost:4000'}/uploads/videos/${file.filename}`,
+      sizeBytes: file.size,
+      mimeType: file.mimetype,
+    };
+  }
+
+  @Get(':id/videos')
+  async listTeacherVideos(@Param('id') id: string) {
+    return this.teachersService.listPublicVideos(id);
+  }
 
   // =========================================================
   // PUBLIC SINGLE TEACHER PROFILE
@@ -564,4 +618,5 @@ export class TeachersController {
   findOne(@Param('id') id: string) {
     return this.teachersService.getPublicProfile(id);
   }
+
 }
