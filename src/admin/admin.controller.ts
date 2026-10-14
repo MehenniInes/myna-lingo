@@ -1,8 +1,14 @@
-import { Body, Controller, Get, Post, Patch, Delete, Param, Query, Req, UseGuards } from '@nestjs/common';
+import { Body, Controller, Get, Post, Patch, Delete, Param, Query, Req, UseGuards, UseInterceptors, BadRequestException, UploadedFile } from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { AdminService } from './admin.service.js';
 import { RolesGuard } from '../auth/roles.guard.js';
 import { Roles } from '../auth/roles.decorator.js';
+import { FileInterceptor } from '@nestjs/platform-express';
+import { diskStorage } from 'multer';
+import { extname, join } from 'path';
+import { randomUUID } from 'crypto';
+
+
 
 @Controller('admin')
 @UseGuards(AuthGuard('jwt'), RolesGuard)
@@ -181,5 +187,43 @@ export class AdminController {
   @Delete('activities/:id')
   deleteActivity(@Param('id') id: string) {
     return this.adminService.deleteActivity(id);
+  }
+
+    // ---------- File Upload (Podcasts: video/audio/cover) ----------
+  @Post('upload')
+  @UseInterceptors(
+    FileInterceptor('file', {
+      storage: diskStorage({
+        destination: (req: any, file: any, cb: any) => {
+          const type = req.query.type || 'video';
+          const folder =
+            type === 'cover' ? 'covers' :
+            type === 'audio' ? 'audio' : 'videos';
+          cb(null, join(process.cwd(), 'uploads', 'podcasts', folder));
+        },
+        filename: (req: any, file: any, cb: any) => {
+          const ext = extname(file.originalname);
+          cb(null, `${randomUUID()}${ext}`);
+        },
+      }),
+      limits: {
+        fileSize: 1024 * 1024 * 1024, // 1 GB
+      },
+      fileFilter: (req: any, file: any, cb: any) => {
+        const ok = /image\/(jpeg|png|jpg|webp)|audio\/(mpeg|mp3|wav|ogg)|video\/(mp4|webm|quicktime)/.test(file.mimetype);
+        if (!ok) return cb(new BadRequestException('Only images, audio, and video files allowed'), false);
+        cb(null, true);
+      },
+    }),
+  )
+  async uploadFile(@UploadedFile() file: any) {
+    if (!file) throw new BadRequestException('No file uploaded');
+    const relativePath = file.path.split('uploads')[1].replace(/\\/g, '/');
+    return {
+      url: `/uploads${relativePath}`,
+      size: file.size,
+      mimetype: file.mimetype,
+      filename: file.filename,
+    };
   }
 }

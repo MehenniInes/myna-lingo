@@ -394,8 +394,9 @@ model Podcast {
   id          String   @id @default(cuid())
   title       String
   description String
-  coverUrl    String
-  audioUrl    String
+  coverUrl    String  @default("")
+  audioUrl    String   @default("")
+  videoUrl    String?
   languageId  String
   language    Language @relation(fields: [languageId], references: [id])
   level       String
