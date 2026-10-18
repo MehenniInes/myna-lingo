@@ -151,6 +151,7 @@ enum NotificationType {
   CHILD_PROGRESS
   ANNOUNCEMENT
   PODCAST_PURCHASED
+  CHAT_MESSAGE
   XP_EARNED
   ADMIN_MESSAGE
 }
@@ -189,6 +190,8 @@ model User {
 
   referralRewardsGiven    ReferralReward[] @relation("ReferralRewardsGiven")
   referralRewardsReceived ReferralReward?  @relation("ReferralRewardsReceived")
+  sentMessages     ChatMessage[] @relation("SentMessages")
+  receivedMessages ChatMessage[] @relation("ReceivedMessages")
 
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
@@ -202,7 +205,8 @@ model User {
   xpTransactions   XPTransaction[]
   notifications    Notification[]
   roomPresence     RoomPresence[]
-    payments Payment[]
+  
+  payments Payment[]
 
   @@index([role])
 }
@@ -677,4 +681,19 @@ model RoomPresence {
   @@unique([sessionId, userId])
   @@index([userId, status])
   @@index([sessionId, status])
+}
+
+model ChatMessage {
+  id         String   @id @default(cuid())
+  senderId   String
+  sender     User     @relation("SentMessages", fields: [senderId], references: [id], onDelete: Cascade)
+  receiverId String
+  receiver   User     @relation("ReceivedMessages", fields: [receiverId], references: [id], onDelete: Cascade)
+  content    String
+  isRead     Boolean  @default(false)
+  readAt     DateTime?
+  createdAt  DateTime @default(now())
+
+  @@index([senderId, receiverId])
+  @@index([receiverId, isRead])
 }

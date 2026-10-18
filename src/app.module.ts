@@ -1,5 +1,5 @@
 import { Module } from '@nestjs/common';
-
+import { ChatModule } from './chat/chat.module.js';
 import { AppController } from './app.controller.js';
 import { AppService } from './app.service.js';
 import { ReferralsModule } from './referrals/referrals.module.js';
@@ -47,6 +47,7 @@ import { PaymentsModule } from './payments/payments.module.js';
     LanguagesModule,
     ReferralsModule,
     PaymentsModule,
+    ChatModule,
   ],
   controllers: [AppController],
   providers: [AppService],
