@@ -23,6 +23,7 @@ import { ScheduleModule } from '@nestjs/schedule';
 import { AgoraModule } from './agora/agora.module.js';
 import { LanguagesModule } from './languages/languages.module.js';
 import { PaymentsModule } from './payments/payments.module.js';
+import { TeacherPaymentsModule } from './teacher-payments/teacher-payments.module.js';
 
 @Module({
   imports: [
@@ -47,6 +48,7 @@ import { PaymentsModule } from './payments/payments.module.js';
     LanguagesModule,
     ReferralsModule,
     PaymentsModule,
+    TeacherPaymentsModule,
   ],
   controllers: [AppController],
   providers: [AppService],
