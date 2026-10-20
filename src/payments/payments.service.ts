@@ -1,6 +1,5 @@
 import {
-  Injectable, BadRequestException, NotFoundException, Logger,
-} from '@nestjs/common';
+  Injectable, BadRequestException, NotFoundException, Logger,ForbiddenException,} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { createHmac, timingSafeEqual } from 'crypto';
 
@@ -128,6 +127,28 @@ export class PaymentsService {
   // ---------- WEBHOOK HANDLER ----------
 
   async handleChargilyWebhook(rawBody: Buffer, signature: string) {
+    // Log every incoming webhook — even bad signatures — for the audit trail.
+    let parsedEventType: string | null = null;
+    try {
+      const parsed = JSON.parse(rawBody.toString('utf8'));
+      parsedEventType = parsed?.type ?? null;
+    } catch { /* not valid JSON — still log */ }
+
+    try {
+      await this.prisma.webhookLog.create({
+        data: {
+          source: 'chargily',
+          eventType: parsedEventType,
+          signature: signature ?? null,
+          rawBody: rawBody.toString('utf8'),
+        },
+      });
+    } catch (logErr: any) {
+      this.logger.warn(`WebhookLog write failed: ${logErr.message}`);
+    }
+
+    // ...existing signature verification continues below...
+    
     if (!this.verifyChargilySignature(rawBody, signature)) {
       this.logger.warn('Rejected webhook — invalid signature');
       throw new BadRequestException('Invalid signature');
@@ -252,5 +273,27 @@ export class PaymentsService {
       orderBy: { createdAt: 'desc' },
       take: 50,
     });
+  }
+    async getPaymentStatus(userId: string, paymentId: string) {
+    const payment = await this.prisma.payment.findUnique({
+      where: { id: paymentId },
+      select: {
+        id: true,
+        userId: true,
+        status: true,
+        amountDA: true,
+        currency: true,
+        productType: true,
+        referenceLabel: true,
+        chargilyCheckoutId: true,
+        paidAt: true,
+        createdAt: true,
+      },
+    });
+    if (!payment) throw new NotFoundException('Payment not found');
+    if (payment.userId !== userId) {
+      throw new ForbiddenException('Not your payment');
+    }
+    return payment;
   }
 }

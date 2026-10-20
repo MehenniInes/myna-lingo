@@ -1,7 +1,5 @@
 import {
-  Controller, Post, Get, Req, Body, UseGuards,
-  BadRequestException, Headers,
-} from '@nestjs/common';
+  Controller, Post, Get, Req, Body, UseGuards,Param,BadRequestException, Headers,} from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { PaymentsService } from './payments.service.js';
 import { CreatePackageCheckoutDto } from './dto/create-checkout.dto.js';
@@ -44,5 +42,10 @@ export class PaymentsController {
   @Post('mock/complete')
   async mockComplete(@Body() body: { paymentId: string }) {
     return this.paymentsService.simulateMockPayment(body.paymentId);
+  }
+    @Get(':id/status')
+  @UseGuards(AuthGuard('jwt'))
+  async getStatus(@Req() req: any, @Param('id') id: string) {
+    return this.paymentsService.getPaymentStatus(req.user.userId, id);
   }
 }

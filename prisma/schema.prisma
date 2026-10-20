@@ -105,6 +105,17 @@ model Payment {
   @@index([userId, status])
   @@index([chargilyCheckoutId])
 }
+model WebhookLog {
+  id         String   @id @default(cuid())
+  source     String
+  eventType  String?
+  signature  String?
+  rawBody    String
+  receivedAt DateTime @default(now())
+
+  @@index([source, receivedAt])
+  @@index([eventType])
+}
 enum ApplicationStatus {
   DRAFT
   PENDING_REVIEW
