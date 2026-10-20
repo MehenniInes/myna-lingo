@@ -1,8 +1,10 @@
 import {
-  Controller, Post, Get, Req, Body, UseGuards,Param,BadRequestException, Headers,} from '@nestjs/common';
+  Controller, Post, Get, Req, Body, UseGuards,Param,Query,BadRequestException, Headers,} from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { PaymentsService } from './payments.service.js';
 import { CreatePackageCheckoutDto } from './dto/create-checkout.dto.js';
+import { Roles } from '../auth/roles.decorator.js';
+import { RolesGuard } from '../auth/roles.guard.js';
 
 @Controller('payments')
 export class PaymentsController {
@@ -42,6 +44,28 @@ export class PaymentsController {
   @Post('mock/complete')
   async mockComplete(@Body() body: { paymentId: string }) {
     return this.paymentsService.simulateMockPayment(body.paymentId);
+  }
+    // ---------- Admin overrides ----------
+
+  @Get('admin/all')
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @Roles('ADMIN')
+  adminList(@Query('status') status?: string) {
+    return this.paymentsService.adminListPayments(status);
+  }
+
+  @Post('admin/:id/activate')
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @Roles('ADMIN')
+  adminActivate(@Req() req: any, @Param('id') id: string) {
+    return this.paymentsService.adminActivate(id, req.user.userId);
+  }
+
+  @Post('admin/:id/refund')
+  @UseGuards(AuthGuard('jwt'), RolesGuard)
+  @Roles('ADMIN')
+  adminRefund(@Req() req: any, @Param('id') id: string) {
+    return this.paymentsService.adminRefund(id, req.user.userId);
   }
     @Get(':id/status')
   @UseGuards(AuthGuard('jwt'))
