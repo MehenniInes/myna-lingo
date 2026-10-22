@@ -31,6 +31,14 @@ interface SessionState {
   ended: boolean;
 }
 
+type CallEndReason =
+  | 'NATURAL'
+  | 'TEACHER_ENDED'
+  | 'STUDENT_ENDED'
+  | 'NO_BALANCE'
+  | 'DISCONNECTED'
+  | 'ERROR';
+
 @WebSocketGateway({
   namespace: '/calls',
   cors: {
@@ -84,7 +92,7 @@ export class CallsGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
     if (session.connectedUserIds.size === 0 && !session.ended) {
       this.logger.log(`All participants left call ${callId} — settling`);
-      await this.settleCall(callId, 'all_participants_left');
+      await this.settleCall(callId, 'DISCONNECTED', undefined, 'all_participants_left');
     }
   }
 
@@ -180,7 +188,7 @@ export class CallsGateway implements OnGatewayConnection, OnGatewayDisconnect {
 
       if (state.remainingSeconds <= 0 && !s.ended) {
         this.logger.log(`Call ${callId} reached 0 balance — auto-ending`);
-        void this.settleCall(callId, 'balance_zero');
+        void this.settleCall(callId, 'NO_BALANCE', undefined, 'balance_zero');
       }
     };
 
@@ -405,13 +413,22 @@ export class CallsGateway implements OnGatewayConnection, OnGatewayDisconnect {
     await this.callsService.logCallEvent(body.callId, client.data.userId, 'end_session', {
       byRole: role,
     });
-    await this.settleCall(body.callId, 'manual_end', client.data.userId);
+
+    const endReason: CallEndReason =
+      role === 'STUDENT' ? 'STUDENT_ENDED' : 'TEACHER_ENDED';
+
+    await this.settleCall(body.callId, endReason, client.data.userId, 'manual_end');
     return { ok: true };
   }
 
   // ---------- Settlement ----------
 
-  private async settleCall(callId: string, reason: string, actorUserId?: string) {
+  private async settleCall(
+    callId: string,
+    endReason: CallEndReason,
+    actorUserId?: string,
+    wireReason?: string,
+  ) {
     const session = this.sessions.get(callId);
     if (!session || session.ended) return;
     session.ended = true;
@@ -427,17 +444,18 @@ export class CallsGateway implements OnGatewayConnection, OnGatewayDisconnect {
     await this.callsService.logCallEvent(
       callId,
       actorUserId ?? null,
-      `session_ended:${reason}`,
+      `session_ended:${endReason.toLowerCase()}`,
       { effectiveDurationSec },
     );
 
     this.server.to(`call:${callId}`).emit('session_ended', {
-      reason,
+      reason: wireReason ?? endReason.toLowerCase(),
+      endReason,
       effectiveDurationSec,
     });
 
     try {
-      await this.callsService.endCallById(callId, effectiveDurationSec);
+      await this.callsService.endCallById(callId, effectiveDurationSec, endReason);
     } catch (err: any) {
       this.logger.error(`Settlement failed for ${callId}: ${err.message}`);
     }

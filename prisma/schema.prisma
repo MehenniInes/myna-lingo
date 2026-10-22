@@ -590,6 +590,14 @@ enum CallStatus {
   COMPLETED
   CANCELLED
 }
+enum CallEndReason {
+  NATURAL
+  TEACHER_ENDED
+  STUDENT_ENDED
+  NO_BALANCE
+  DISCONNECTED
+  ERROR
+}
 
 enum TeachingTimeType {
   LESSON_COMPLETED
@@ -613,6 +621,7 @@ model Call {
   status         CallStatus     @default(ACTIVE)
   createdAt      DateTime       @default(now())
   eventLogs      CallEventLog[]
+  endReason      CallEndReason?
 
   @@index([studentId, status])
   @@index([teacherId, status])
@@ -726,4 +735,20 @@ model RoomPresence {
   @@unique([sessionId, userId])
   @@index([userId, status])
   @@index([sessionId, status])
+}
+// ========== ADMIN AUDIT LOG ==========
+model AdminAuditLog {
+  id          String   @id @default(cuid())
+  adminUserId String
+  adminEmail  String?
+  action      String
+  targetType  String
+  targetId    String?
+  metadata    Json?
+  ipAddress   String?
+  createdAt   DateTime @default(now())
+
+  @@index([adminUserId, createdAt])
+  @@index([targetType, targetId])
+  @@index([createdAt])
 }
