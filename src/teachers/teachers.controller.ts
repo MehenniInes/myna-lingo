@@ -17,6 +17,7 @@ import { AuthGuard } from '@nestjs/passport';
 import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import { extname } from 'path';
+import { AdminAuditService } from '../admin-audit/admin-audit.service.js';
 
 import { TeachersService } from './teachers.service.js';
 
@@ -41,7 +42,10 @@ import { RolesGuard } from '../auth/roles.guard.js';
 
 @Controller('teachers')
 export class TeachersController {
-  constructor(private readonly teachersService: TeachersService) {}
+  constructor(
+    private readonly teachersService: TeachersService,
+    private readonly audit: AdminAuditService,
+  ) {}
 
   // =========================================================
   // TEACHER APPLICATION
@@ -72,12 +76,20 @@ export class TeachersController {
     @Param('id') id: string,
     @Body() dto: ReviewDto,
   ) {
-    return this.teachersService.reviewApplication(
+    const result = await this.teachersService.reviewApplication(
       id,
       req.user.userId,
       dto.decision,
       dto.note,
     );
+    await this.audit.logFromRequest(
+      req,
+      dto.decision === 'APPROVED' ? 'APPROVE_TEACHER' : 'REJECT_TEACHER',
+      'TeacherProfile',
+      id,
+      { note: dto.note },
+    );
+    return result;
   }
 
   // =========================================================

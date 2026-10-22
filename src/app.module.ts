@@ -1,4 +1,7 @@
 import { Module } from '@nestjs/common';
+import { APP_FILTER } from '@nestjs/core';
+import { SentryGlobalFilter } from '@sentry/nestjs/setup';
+import { AdminAuditModule } from './admin-audit/admin-audit.module.js';
 
 import { AppController } from './app.controller.js';
 import { AppService } from './app.service.js';
@@ -31,6 +34,7 @@ import { TeacherPaymentsModule } from './teacher-payments/teacher-payments.modul
     AuthModule,
     UsersModule,
     PrismaModule,
+    AdminAuditModule,
     TeachersModule,
     PackagesModule,
     MinutesModule,
@@ -51,7 +55,10 @@ import { TeacherPaymentsModule } from './teacher-payments/teacher-payments.modul
     TeacherPaymentsModule,
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [
+     AppService,
+    { provide: APP_FILTER, useClass: SentryGlobalFilter },
+  ],
 
 })
 export class AppModule {}
