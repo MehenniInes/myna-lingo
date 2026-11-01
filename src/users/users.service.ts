@@ -13,7 +13,7 @@ export class UsersService {
   async create(data: {
     email: string;
     password: string;
-    fullName: string;
+    fullName?: string; // 👈 ولت اختيارية
     role: 'STUDENT' | 'PARENT' | 'TEACHER' | 'ADMIN';
     refCode?: string;
     signupIp?: string;
@@ -26,7 +26,11 @@ export class UsersService {
     }
 
     const passwordHash = await bcrypt.hash(data.password, 10);
-    const referralCode = await this.generateUniqueReferralCode(data.fullName);
+
+    // 👈 إلا ما كانش الإسم، كناخدو الجزء الأول من الإيميل
+    const finalFullName = data.fullName?.trim() || data.email.split('@')[0];
+    
+    const referralCode = await this.generateUniqueReferralCode(finalFullName);
 
     // Transaction: user + profile must both succeed or both fail
     const user = await this.prisma.$transaction(async (tx) => {
@@ -34,7 +38,7 @@ export class UsersService {
         data: {
           email: data.email,
           passwordHash,
-          fullName: data.fullName,
+          fullName: finalFullName, // 👈 كنستعملو الإسم النهائي
           role: data.role,
           referralCode,
         },

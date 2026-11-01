@@ -29,4 +29,10 @@ export class ChildrenController {
   remove(@Param('id') id: string, @Req() req: any) {
     return this.childrenService.remove(req.user.userId, id);
   }
+
+  // 👈 زدنا هاد الـ Endpoint الجديد
+  @Post(':id/login-as-child')
+  loginAsChild(@Param('id') childId: string, @Req() req: any) {
+    return this.childrenService.loginAsChild(req.user.userId, childId);
+  }
 }

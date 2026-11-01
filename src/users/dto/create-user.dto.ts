@@ -8,8 +8,9 @@ export class CreateUserDto {
   @MinLength(6)
   password: string;
 
+  @IsOptional() // 👈 زدنا هادي باش ما يطيحش إلا كان خاوي
   @IsString()
-  fullName: string;
+  fullName?: string;
 
   @IsIn(['STUDENT', 'PARENT', 'TEACHER'])
   role: 'STUDENT' | 'PARENT' | 'TEACHER' | 'ADMIN';

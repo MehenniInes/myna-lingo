@@ -1,9 +1,13 @@
 import { Injectable, NotFoundException, BadRequestException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { JwtService } from '@nestjs/jwt'; // 👈 زدنا هادي
 
 @Injectable()
 export class ChildrenService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private jwtService: JwtService, // 👈 زدنا هادي
+  ) {}
 
   private calculateAgeCategory(dateOfBirth: Date): 'AGE_6_11' | 'AGE_12_14' | null {
     const today = new Date();
@@ -41,17 +45,13 @@ export class ChildrenService {
       throw new BadRequestException('Child must be between 6 and 14 years old');
     }
 
-    // نصنعو User جديد للطفل (بلا إيميل، بلا باسورد - كيتسير من طرف الولي)
-    // بدلاً من ذلك، نخليو الـ ChildProfile مرتبط بـ User وهمي ولا نستعملو الـ StudentProfile مباشرة
-
-    // الطريقة الأبسط: نصنع User بـ email عشوائي و role STUDENT
     const childEmail = `child-${Date.now()}-${Math.random().toString(36).slice(2, 8)}@mynalingo.local`;
 
     return this.prisma.$transaction(async (tx) => {
       const childUser = await tx.user.create({
         data: {
           email: childEmail,
-          passwordHash: '', // ما عندوش باسورد، كيدخل من حساب الولي
+          passwordHash: '', 
           fullName: data.fullName,
           role: 'STUDENT',
           isActive: true,
@@ -122,5 +122,34 @@ export class ChildrenService {
 
     await this.prisma.user.delete({ where: { id: child.userId } });
     return { success: true };
+  }
+
+  // 👈 زدنا هاد الدالة الجديدة
+  async loginAsChild(parentUserId: string, childId: string) {
+    const parent = await this.getParentProfile(parentUserId);
+
+    // تأكد أن الطفل تابع لهذا الوالد
+    const child = await this.prisma.studentProfile.findFirst({
+      where: { id: childId, parentId: parent.id },
+      include: { user: true },
+    });
+
+    if (!child) {
+      throw new NotFoundException('Child not found or does not belong to this parent');
+    }
+
+    // صنع الـ Token للطفل
+    const payload = { sub: child.user.id, email: child.user.email, role: child.user.role };
+    const accessToken = await this.jwtService.signAsync(payload);
+
+    return {
+      accessToken,
+      user: {
+        id: child.user.id,
+        email: child.user.email,
+        fullName: child.user.fullName,
+        role: child.user.role,
+      },
+    };
   }
 }
