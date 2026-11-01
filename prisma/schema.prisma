@@ -748,7 +748,10 @@ model ChatMessage {
   sender     User      @relation("SentMessages", fields: [senderId], references: [id], onDelete: Cascade)
   receiverId String
   receiver   User      @relation("ReceivedMessages", fields: [receiverId], references: [id], onDelete: Cascade)
-  content    String
+  content    String? // 👈 ولت اختيارية (ممكن نرسلو غير صورة بلا نص)
+  type       String    @default("TEXT") // 👈 نوع الرسالة: TEXT, IMAGE, FILE
+  fileUrl    String? // 👈 مسار الصورة ولا الملف
+  fileName   String? // 👈 سمية الملف الأصلي
   isRead     Boolean   @default(false)
   readAt     DateTime?
   createdAt  DateTime  @default(now())

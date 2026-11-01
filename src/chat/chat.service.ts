@@ -5,9 +5,23 @@ import { PrismaService } from '../prisma/prisma.service.js';
 export class ChatService {
   constructor(private prisma: PrismaService) {}
 
-  async saveMessage(senderId: string, receiverId: string, content: string) {
+  async saveMessage(
+    senderId: string, 
+    receiverId: string, 
+    content: string | null, 
+    type: string = 'TEXT', 
+    fileUrl?: string, 
+    fileName?: string
+  ) {
     return this.prisma.chatMessage.create({
-      data: { senderId, receiverId, content },
+      data: { 
+        senderId, 
+        receiverId, 
+        content, 
+        type, 
+        fileUrl, 
+        fileName 
+      },
       include: {
         sender: { select: { id: true, fullName: true, role: true } },
         receiver: { select: { id: true, fullName: true, role: true } },
@@ -29,7 +43,6 @@ export class ChatService {
   }
 
   async getConversations(userId: string) {
-    // هادي كترجع لائحة الناس اللي تهضرو معاهم
     const messages = await this.prisma.chatMessage.findMany({
       where: {
         OR: [{ senderId: userId }, { receiverId: userId }],
@@ -48,9 +61,8 @@ export class ChatService {
       if (!conversationsMap.has(otherUser.id)) {
         conversationsMap.set(otherUser.id, {
           user: otherUser,
-          lastMessage: msg.content,
+          lastMessage: msg.type === 'IMAGE' ? '📷 Image' : msg.type === 'FILE' ? '📎 File' : msg.content,
           lastMessageAt: msg.createdAt,
-          unreadCount: 0, // ممكن نحسبوها من بعد
         });
       }
     }
@@ -65,20 +77,11 @@ export class ChatService {
     });
   }
 
-  async getAvailableUsers(currentUserId: string) {
-    // 1. جيب المستخدم الحالي من الداتابيز باش نعرفو الـ role ديالو بالضبط
-    const currentUser = await this.prisma.user.findUnique({
-      where: { id: currentUserId },
-    });
-
-    if (!currentUser) return [];
-
-    // 2. إلا كنتي طالب، جيب الأساتذة. إلا كنتي أستاذ، جيب الطلبة.
-    const targetRole = currentUser.role === 'STUDENT' ? 'TEACHER' : 'STUDENT';
-
+      async getAvailableUsers(currentUserId: string) {
+    // 👈 هنا قمنا بتغيير الكود باش يجيب الأساتذة فقط دايماً
     return this.prisma.user.findMany({
       where: {
-        role: targetRole as any,
+        role: 'TEACHER', // فرضنا الدور يكون أستاذ
         id: { not: currentUserId },
       },
       select: { id: true, fullName: true, role: true },

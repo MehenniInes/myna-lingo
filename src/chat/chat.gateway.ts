@@ -15,7 +15,7 @@ import { PrismaService } from '../prisma/prisma.service.js';
 @WebSocketGateway({
   namespace: '/chat',
   cors: {
-   origin: process.env.CORS_ORIGINS?.split(',') || ['http://localhost:3000', 'http://localhost:3001'],
+    origin: process.env.CORS_ORIGINS?.split(',') || ['http://localhost:3000', 'http://localhost:3001'],
     credentials: true,
   },
 })
@@ -37,7 +37,6 @@ export class ChatGateway implements OnGatewayConnection {
       const decoded: any = jwt.verify(token, secret);
       client.data.userId = decoded.sub;
       
-      // كل مستخدم كيدخل لـ Room خاص بيه
       client.join(`user:${decoded.sub}`);
       this.logger.log(`Chat socket connected: user=${decoded.sub}`);
     } catch (err: any) {
@@ -49,39 +48,49 @@ export class ChatGateway implements OnGatewayConnection {
   @SubscribeMessage('send_message')
   async handleSendMessage(
     @ConnectedSocket() client: Socket,
-    @MessageBody() body: { receiverId: string; content: string },
+    @MessageBody() body: { receiverId: string; content?: string; type?: string; fileUrl?: string; fileName?: string },
   ) {
     const senderId = client.data.userId;
-    if (!senderId || !body.receiverId || !body.content) return { error: 'invalid_data' };
+    if (!senderId || !body.receiverId) return { error: 'invalid_data' };
+    
+    // إلا ما كانش نص ولا ملف، ما نرسلو والو
+    if (!body.content && !body.fileUrl) return { error: 'empty_message' };
 
-    const msg = await this.chatService.saveMessage(senderId, body.receiverId, body.content);
+    const msg = await this.chatService.saveMessage(
+      senderId, 
+      body.receiverId, 
+      body.content || null, 
+      body.type || 'TEXT', 
+      body.fileUrl, 
+      body.fileName
+    );
 
-    // 1. سجل الإشعار فـ الداتابيز
+    // الإشعار
+    const notifTitle = body.type === 'IMAGE' ? 'New Image 📷' : body.type === 'FILE' ? 'New File 📎' : 'New Message 💬';
+    const notifMessage = body.type === 'TEXT' ? `New message from ${msg.sender.fullName}` : `${msg.sender.fullName} sent an attachment`;
+
     await this.prisma.notification.create({
       data: {
         userId: body.receiverId,
         type: 'CHAT_MESSAGE',
-        title: 'New Message 💬',
-        message: `New message from ${msg.sender.fullName}`,
+        title: notifTitle,
+        message: notifMessage,
         data: { senderId: msg.senderId, chatId: msg.id },
       },
     });
 
-    // 2. صيفط إشارة الإشعار للـ Frontend (باش تطلع الكارطة)
     this.server.to(`user:${body.receiverId}`).emit('new_notification', {
-      title: 'New Message 💬',
-      message: `New message from ${msg.sender.fullName}`,
+      title: notifTitle,
+      message: notifMessage,
     });
 
-    // صيفط الرسالة للـ Receiver
     this.server.to(`user:${body.receiverId}`).emit('new_message', msg);
-    // صيفطها حتى للـ Sender
     this.server.to(`user:${senderId}`).emit('new_message', msg);
 
     return { ok: true, message: msg };
   }
 
-   @SubscribeMessage('mark_read')
+  @SubscribeMessage('mark_read')
   async handleMarkRead(
     @ConnectedSocket() client: Socket,
     @MessageBody() body: { senderId: string },
@@ -89,15 +98,8 @@ export class ChatGateway implements OnGatewayConnection {
     const receiverId = client.data.userId;
     if (!receiverId || !body.senderId) return { error: 'invalid_data' };
 
-    console.log(`[MarkRead] User ${receiverId} is marking messages from ${body.senderId} as read`);
-
     await this.chatService.markAsRead(receiverId, body.senderId);
-    
-    // صيفط الإشارة للشخص اللي صيفط الرسالة
     this.server.to(`user:${body.senderId}`).emit('messages_read', { by: receiverId });
-    console.log(`[MarkRead] Emitted messages_read to user:${body.senderId}`);
-    
     return { ok: true };
-
   }
 }
