@@ -15,7 +15,7 @@ import { PrismaService } from '../prisma/prisma.service.js';
 @WebSocketGateway({
   namespace: '/chat',
   cors: {
-    origin: ['http://localhost:3000', 'http://localhost:3001'],
+   origin: process.env.CORS_ORIGINS?.split(',') || ['http://localhost:3000', 'http://localhost:3001'],
     credentials: true,
   },
 })
