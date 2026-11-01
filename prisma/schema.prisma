@@ -65,6 +65,7 @@ enum LedgerTransactionType {
   ADMIN_ADJUSTMENT
   REFUND
 }
+
 enum CheckoutStatus {
   PENDING
   SUCCESS
@@ -79,32 +80,45 @@ enum PaymentProduct {
 }
 
 model Payment {
-  id              String          @id @default(cuid())
-  userId          String
-  user            User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
-  productType     PaymentProduct
-  referenceId     String           // Package.id or Podcast.id
-  referenceLabel  String?          // snapshot: "60 minutes package"
-  
-  amountDA        Int              // in DZD (Chargily wants integer)
-  currency        String           @default("dzd")
+  productType    PaymentProduct
+  referenceId    String // Package.id or Podcast.id
+  referenceLabel String? // snapshot: "60 minutes package"
 
-    status          CheckoutStatus    @default(PENDING)
+  amountDA Int // in DZD (Chargily wants integer)
+  currency String @default("dzd")
+
+  status CheckoutStatus @default(PENDING)
 
   // Chargily metadata
-  chargilyCheckoutId  String?      @unique
-  chargilyCheckoutUrl String?
-  chargilyWebhookPayload Json?     // raw webhook body for audit
+  chargilyCheckoutId     String? @unique
+  chargilyCheckoutUrl    String?
+  chargilyWebhookPayload Json? // raw webhook body for audit
 
   // Audit
-  paidAt          DateTime?
-  createdAt       DateTime         @default(now())
-  updatedAt       DateTime         @updatedAt
+  paidAt    DateTime?
+  createdAt DateTime  @default(now())
+  updatedAt DateTime  @updatedAt
 
   @@index([userId, status])
   @@index([chargilyCheckoutId])
 }
+
+model WebhookLog {
+  id         String   @id @default(cuid())
+  source     String
+  eventType  String?
+  signature  String?
+  rawBody    String
+  receivedAt DateTime @default(now())
+
+  @@index([source, receivedAt])
+  @@index([eventType])
+}
+
 enum ApplicationStatus {
   DRAFT
   PENDING_REVIEW
@@ -172,29 +186,29 @@ model ReferralReward {
 
 // ========== USERS ==========
 model User {
-  id           String   @id @default(cuid())
-  email        String   @unique
+  id           String  @id @default(cuid())
+  email        String  @unique
   passwordHash String
   role         Role
   fullName     String
   phone        String?
-  locale       String   @default("ar")
-  isActive     Boolean  @default(true)
+  locale       String  @default("ar")
+  isActive     Boolean @default(true)
 
-  tier              UserTier      @default(TRIAL)
-  paymentStatus     PaymentStatus @default(NONE)
-  referralCode      String?       @unique
-  referredByUserId  String?
-  referredBy        User?         @relation("UserReferrals", fields: [referredByUserId], references: [id], onDelete: SetNull)
-  referredUsers     User[]        @relation("UserReferrals")
+  tier             UserTier      @default(TRIAL)
+  paymentStatus    PaymentStatus @default(NONE)
+  referralCode     String?       @unique
+  referredByUserId String?
+  referredBy       User?         @relation("UserReferrals", fields: [referredByUserId], references: [id], onDelete: SetNull)
+  referredUsers    User[]        @relation("UserReferrals")
 
   referralRewardsGiven    ReferralReward[] @relation("ReferralRewardsGiven")
   referralRewardsReceived ReferralReward?  @relation("ReferralRewardsReceived")
-  sentMessages     ChatMessage[] @relation("SentMessages")
-  receivedMessages ChatMessage[] @relation("ReceivedMessages")
+  sentMessages            ChatMessage[]    @relation("SentMessages")
+  receivedMessages        ChatMessage[]    @relation("ReceivedMessages")
 
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
 
   studentProfile StudentProfile?
   teacherProfile TeacherProfile?
@@ -205,8 +219,7 @@ model User {
   xpTransactions   XPTransaction[]
   notifications    Notification[]
   roomPresence     RoomPresence[]
-  
-  payments Payment[]
+  payments         Payment[]
 
   @@index([role])
 }
@@ -263,15 +276,17 @@ model TeacherProfile {
   reviewedAt            DateTime?
   reviewNote            String?
 
-  teacherLanguages    TeacherLanguage[]
-  spokenLanguages     SpokenLanguage[]
-  educations          Education[]
-  groupClasses        GroupClass[]
-  calls               Call[]
-  teachingTimeLedger  TeachingTimeLedger[]
-  bookings            Booking[]
-    videos           TeacherVideo[]
+  teacherLanguages   TeacherLanguage[]
+  spokenLanguages    SpokenLanguage[]
+  educations         Education[]
+  groupClasses       GroupClass[]
+  calls              Call[]
+  teachingTimeLedger TeachingTimeLedger[]
+  bookings           Booking[]
+  videos             TeacherVideo[]
+  paymentRequests    TeacherPaymentRequest[]
 }
+
 model TeacherVideo {
   id         String         @id @default(cuid())
   teacherId  String
@@ -398,7 +413,7 @@ model Podcast {
   id          String   @id @default(cuid())
   title       String
   description String
-  coverUrl    String  @default("")
+  coverUrl    String   @default("")
   audioUrl    String   @default("")
   videoUrl    String?
   languageId  String
@@ -467,9 +482,9 @@ model PodcastVocabulary {
 }
 
 model PodcastQuestion {
-  id         String  @id @default(cuid())
+  id         String   @id @default(cuid())
   podcastId  String
-  podcast    Podcast @relation(fields: [podcastId], references: [id], onDelete: Cascade)
+  podcast    Podcast  @relation(fields: [podcastId], references: [id], onDelete: Cascade)
   question   String
   options    String[]
   correctIdx Int
@@ -580,6 +595,15 @@ enum CallStatus {
   CANCELLED
 }
 
+enum CallEndReason {
+  NATURAL
+  TEACHER_ENDED
+  STUDENT_ENDED
+  NO_BALANCE
+  DISCONNECTED
+  ERROR
+}
+
 enum TeachingTimeType {
   LESSON_COMPLETED
   PAYMENT_REQUESTED
@@ -602,6 +626,7 @@ model Call {
   status         CallStatus     @default(ACTIVE)
   createdAt      DateTime       @default(now())
   eventLogs      CallEventLog[]
+  endReason      CallEndReason?
 
   @@index([studentId, status])
   @@index([teacherId, status])
@@ -618,32 +643,66 @@ model CallEventLog {
 
   @@index([callId, createdAt])
 }
+
 model TeachingTimeLedger {
-  id           String            @id @default(cuid())
+  id           String           @id @default(cuid())
   teacherId    String
-  teacher      TeacherProfile    @relation(fields: [teacherId], references: [id])
+  teacher      TeacherProfile   @relation(fields: [teacherId], references: [id])
   type         TeachingTimeType
   seconds      Int
   balanceAfter Int
   referenceId  String?
   note         String?
-  createdAt    DateTime          @default(now())
+  createdAt    DateTime         @default(now())
 
   @@index([teacherId, createdAt])
 }
 
+// ========== TEACHER PAYMENTS ==========
+enum TeacherPaymentStatus {
+  PENDING
+  APPROVED
+  PAID
+  REJECTED
+  CANCELLED
+}
+
+model TeacherPaymentRequest {
+  id        String         @id @default(cuid())
+  teacherId String
+  teacher   TeacherProfile @relation(fields: [teacherId], references: [id], onDelete: Cascade)
+
+  frozenSeconds Int
+  payoutDA      Int?
+  status        TeacherPaymentStatus @default(PENDING)
+
+  requestedAt DateTime  @default(now())
+  approvedAt  DateTime?
+  approvedBy  String?
+  paidAt      DateTime?
+  paidBy      String?
+  note        String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([teacherId, status])
+  @@index([status, requestedAt])
+}
+
+// ========== BOOKINGS ==========
 model Booking {
-  id          String        @id @default(cuid())
+  id          String         @id @default(cuid())
   studentId   String
   student     StudentProfile @relation(fields: [studentId], references: [id])
   teacherId   String
   teacher     TeacherProfile @relation(fields: [teacherId], references: [id])
   serviceType ServiceType
   scheduledAt DateTime
-  durationMin Int           @default(30)
-  status      BookingStatus @default(PENDING)
+  durationMin Int            @default(30)
+  status      BookingStatus  @default(PENDING)
   notes       String?
-  createdAt   DateTime      @default(now())
+  createdAt   DateTime       @default(now())
 
   @@index([studentId, status])
   @@index([teacherId, status])
@@ -684,16 +743,33 @@ model RoomPresence {
 }
 
 model ChatMessage {
-  id         String   @id @default(cuid())
+  id         String    @id @default(cuid())
   senderId   String
-  sender     User     @relation("SentMessages", fields: [senderId], references: [id], onDelete: Cascade)
+  sender     User      @relation("SentMessages", fields: [senderId], references: [id], onDelete: Cascade)
   receiverId String
-  receiver   User     @relation("ReceivedMessages", fields: [receiverId], references: [id], onDelete: Cascade)
+  receiver   User      @relation("ReceivedMessages", fields: [receiverId], references: [id], onDelete: Cascade)
   content    String
-  isRead     Boolean  @default(false)
+  isRead     Boolean   @default(false)
   readAt     DateTime?
-  createdAt  DateTime @default(now())
+  createdAt  DateTime  @default(now())
 
   @@index([senderId, receiverId])
   @@index([receiverId, isRead])
+}
+
+// ========== ADMIN AUDIT LOG ==========
+model AdminAuditLog {
+  id          String   @id @default(cuid())
+  adminUserId String
+  adminEmail  String?
+  action      String
+  targetType  String
+  targetId    String?
+  metadata    Json?
+  ipAddress   String?
+  createdAt   DateTime @default(now())
+
+  @@index([adminUserId, createdAt])
+  @@index([targetType, targetId])
+  @@index([createdAt])
 }

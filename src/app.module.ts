@@ -1,5 +1,12 @@
 import { Module } from '@nestjs/common';
+<<<<<<< HEAD
 import { ChatModule } from './chat/chat.module.js';
+=======
+import { APP_FILTER } from '@nestjs/core';
+import { SentryGlobalFilter } from '@sentry/nestjs/setup';
+import { AdminAuditModule } from './admin-audit/admin-audit.module.js';
+
+>>>>>>> main
 import { AppController } from './app.controller.js';
 import { AppService } from './app.service.js';
 import { ReferralsModule } from './referrals/referrals.module.js';
@@ -23,6 +30,7 @@ import { ScheduleModule } from '@nestjs/schedule';
 import { AgoraModule } from './agora/agora.module.js';
 import { LanguagesModule } from './languages/languages.module.js';
 import { PaymentsModule } from './payments/payments.module.js';
+import { TeacherPaymentsModule } from './teacher-payments/teacher-payments.module.js';
 
 @Module({
   imports: [
@@ -30,6 +38,7 @@ import { PaymentsModule } from './payments/payments.module.js';
     AuthModule,
     UsersModule,
     PrismaModule,
+    AdminAuditModule,
     TeachersModule,
     PackagesModule,
     MinutesModule,
@@ -47,10 +56,17 @@ import { PaymentsModule } from './payments/payments.module.js';
     LanguagesModule,
     ReferralsModule,
     PaymentsModule,
+<<<<<<< HEAD
     ChatModule,
+=======
+    TeacherPaymentsModule,
+>>>>>>> main
   ],
   controllers: [AppController],
-  providers: [AppService],
+  providers: [
+     AppService,
+    { provide: APP_FILTER, useClass: SentryGlobalFilter },
+  ],
 
 })
 export class AppModule {}

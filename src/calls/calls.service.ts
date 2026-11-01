@@ -106,7 +106,7 @@ export class CallsService {
     if (!student || student.id !== call.studentId) {
       throw new ForbiddenException('This is not your call');
     }
-    return this.settleCallInternal(callId);
+    return this.settleCallInternal(callId, undefined, 'STUDENT_ENDED');
   }
 
   /**
@@ -114,11 +114,25 @@ export class CallsService {
    * overrideDurationSec lets the gateway pass the "effective" duration
    * (wall clock minus pauses) instead of recomputing from startTime.
    */
-  async endCallById(callId: string, overrideDurationSec?: number) {
-    return this.settleCallInternal(callId, overrideDurationSec);
+   async endCallById(
+    callId: string,
+    overrideDurationSec?: number,
+    endReason?: 'NATURAL' | 'TEACHER_ENDED' | 'STUDENT_ENDED' | 'NO_BALANCE' | 'DISCONNECTED' | 'ERROR',
+  ) {
+    return this.settleCallInternal(callId, overrideDurationSec, endReason);
   }
 
-  private async settleCallInternal(callId: string, overrideDurationSec?: number) {
+  private async settleCallInternal(
+    callId: string,
+    overrideDurationSec?: number,
+    endReason?:
+      | 'NATURAL'
+      | 'TEACHER_ENDED'
+      | 'STUDENT_ENDED'
+      | 'NO_BALANCE'
+      | 'DISCONNECTED'
+      | 'ERROR',
+  ) {
     const call = await this.prisma.call.findUnique({ where: { id: callId } });
     if (!call) throw new NotFoundException('Call not found');
     if (call.status !== 'ACTIVE') {
@@ -171,7 +185,12 @@ export class CallsService {
 
       const updated = await tx.call.update({
         where: { id: callId },
-        data: { endTime, durationSec: billedSec, status: 'COMPLETED' },
+        data: {
+          endTime,
+          durationSec: billedSec,
+          status: 'COMPLETED',
+          endReason: endReason ?? 'NATURAL',
+        },
       });
 
       return {
@@ -301,4 +320,4 @@ export class CallsService {
       formatted: `${mins}:${secs.toString().padStart(2, '0')}`,
     };
   }
-}
+ }

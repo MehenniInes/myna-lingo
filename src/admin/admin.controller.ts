@@ -3,18 +3,25 @@ import { AuthGuard } from '@nestjs/passport';
 import { AdminService } from './admin.service.js';
 import { RolesGuard } from '../auth/roles.guard.js';
 import { Roles } from '../auth/roles.decorator.js';
+<<<<<<< HEAD
 import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import { extname, join } from 'path';
 import { randomUUID } from 'crypto';
 
 
+=======
+import { AdminAuditService } from '../admin-audit/admin-audit.service.js';
+>>>>>>> main
 
 @Controller('admin')
 @UseGuards(AuthGuard('jwt'), RolesGuard)
 @Roles('ADMIN')
 export class AdminController {
-  constructor(private adminService: AdminService) {}
+  constructor(
+    private adminService: AdminService,
+    private audit: AdminAuditService,
+  ) {}
 
   // ---------- Stats ----------
   @Get('stats')
@@ -65,14 +72,18 @@ export class AdminController {
     return this.adminService.listTeachers({ search, status });
   }
 
-  @Patch('teachers/:id/suspend')
-  suspendTeacher(@Param('id') id: string, @Req() req: any) {
-    return this.adminService.suspendTeacher(id, req.user.userId);
+    @Patch('teachers/:id/suspend')
+  async suspendTeacher(@Param('id') id: string, @Req() req: any) {
+    const result = await this.adminService.suspendTeacher(id, req.user.userId);
+    await this.audit.logFromRequest(req, 'SUSPEND_TEACHER', 'TeacherProfile', id);
+    return result;
   }
 
-  @Patch('teachers/:id/reactivate')
-  reactivateTeacher(@Param('id') id: string, @Req() req: any) {
-    return this.adminService.reactivateTeacher(id, req.user.userId);
+   @Patch('teachers/:id/reactivate')
+  async reactivateTeacher(@Param('id') id: string, @Req() req: any) {
+    const result = await this.adminService.reactivateTeacher(id, req.user.userId);
+    await this.audit.logFromRequest(req, 'REACTIVATE_TEACHER', 'TeacherProfile', id);
+    return result;
   }
 
   // ---------- Teacher internal rates (private) ----------
@@ -81,12 +92,17 @@ export class AdminController {
     return this.adminService.listTeacherRates();
   }
 
-  @Patch('teacher-rates/:id')
-  setTeacherRate(
+    @Patch('teacher-rates/:id')
+  async setTeacherRate(
     @Param('id') id: string,
     @Body() body: { internalHourlyRateDA: number | null },
+    @Req() req: any,
   ) {
-    return this.adminService.setTeacherRate(id, body.internalHourlyRateDA);
+    const result = await this.adminService.setTeacherRate(id, body.internalHourlyRateDA);
+    await this.audit.logFromRequest(req, 'SET_TEACHER_RATE', 'TeacherProfile', id, {
+      rate: body.internalHourlyRateDA,
+    });
+    return result;
   }
 
   // ---------- Packages ----------
@@ -144,10 +160,15 @@ export class AdminController {
   getPendingStudents() {
     return this.adminService.getPendingStudents();
   }
-
   @Patch('users/:id/tier')
-  updateUserTier(@Param('id') id: string, @Body() body: { tier: string }) {
-    return this.adminService.updateUserTier(id, body.tier);
+  async updateUserTier(
+    @Param('id') id: string,
+    @Body() body: { tier: string },
+    @Req() req: any,
+  ) {
+    const result = await this.adminService.updateUserTier(id, body.tier);
+    await this.audit.logFromRequest(req, 'SET_USER_TIER', 'User', id, { tier: body.tier });
+    return result;
   }
 
   @Patch('users/:id/payment-status')
@@ -158,14 +179,21 @@ export class AdminController {
     return this.adminService.updateUserPaymentStatus(id, body.paymentStatus);
   }
 
-  @Post('users/bulk-activate')
-  bulkActivatePending() {
-    return this.adminService.bulkActivatePending();
+    @Post('users/bulk-activate')
+  async bulkActivatePending(@Req() req: any) {
+    const result = await this.adminService.bulkActivatePending();
+    await this.audit.logFromRequest(req, 'BULK_ACTIVATE_USERS', 'User', null, {
+      count: result?.activatedCount ?? 0,
+    });
+    return result;
   }
-
   @Patch('users/:id/toggle-active')
-  toggleUserActive(@Param('id') id: string) {
-    return this.adminService.toggleUserActive(id);
+  async toggleUserActive(@Param('id') id: string, @Req() req: any) {
+    const result = await this.adminService.toggleUserActive(id);
+    await this.audit.logFromRequest(req, 'TOGGLE_USER_ACTIVE', 'User', id, {
+      isActive: result?.isActive,
+    });
+    return result;
   }
 
   // ---------- Activities ----------

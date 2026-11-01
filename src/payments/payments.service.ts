@@ -1,6 +1,5 @@
 import {
-  Injectable, BadRequestException, NotFoundException, Logger,
-} from '@nestjs/common';
+  Injectable, BadRequestException, NotFoundException, Logger,ForbiddenException,} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
 import { createHmac, timingSafeEqual } from 'crypto';
 
@@ -128,6 +127,28 @@ export class PaymentsService {
   // ---------- WEBHOOK HANDLER ----------
 
   async handleChargilyWebhook(rawBody: Buffer, signature: string) {
+    // Log every incoming webhook — even bad signatures — for the audit trail.
+    let parsedEventType: string | null = null;
+    try {
+      const parsed = JSON.parse(rawBody.toString('utf8'));
+      parsedEventType = parsed?.type ?? null;
+    } catch { /* not valid JSON — still log */ }
+
+    try {
+      await this.prisma.webhookLog.create({
+        data: {
+          source: 'chargily',
+          eventType: parsedEventType,
+          signature: signature ?? null,
+          rawBody: rawBody.toString('utf8'),
+        },
+      });
+    } catch (logErr: any) {
+      this.logger.warn(`WebhookLog write failed: ${logErr.message}`);
+    }
+
+    // ...existing signature verification continues below...
+    
     if (!this.verifyChargilySignature(rawBody, signature)) {
       this.logger.warn('Rejected webhook — invalid signature');
       throw new BadRequestException('Invalid signature');
@@ -251,6 +272,180 @@ export class PaymentsService {
       where: { userId },
       orderBy: { createdAt: 'desc' },
       take: 50,
+    });
+  }
+    async getPaymentStatus(userId: string, paymentId: string) {
+    const payment = await this.prisma.payment.findUnique({
+      where: { id: paymentId },
+      select: {
+        id: true,
+        userId: true,
+        status: true,
+        amountDA: true,
+        currency: true,
+        productType: true,
+        referenceLabel: true,
+        chargilyCheckoutId: true,
+        paidAt: true,
+        createdAt: true,
+      },
+    });
+    if (!payment) throw new NotFoundException('Payment not found');
+    if (payment.userId !== userId) {
+      throw new ForbiddenException('Not your payment');
+    }
+    return payment;
+  }
+    // ---------- Admin overrides ----------
+
+  async adminListPayments(status?: string) {
+    const where: any = {};
+    if (status && status !== 'ALL') where.status = status;
+
+    return this.prisma.payment.findMany({
+      where,
+      include: {
+        user: { select: { id: true, fullName: true, email: true } },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 500,
+    });
+  }
+
+  async adminActivate(paymentId: string, adminUserId: string) {
+    const payment = await this.prisma.payment.findUnique({
+      where: { id: paymentId },
+    });
+    if (!payment) throw new NotFoundException('Payment not found');
+    if (payment.status === 'SUCCESS') {
+      throw new BadRequestException('Already successful');
+    }
+    if (payment.status === 'REFUNDED') {
+      throw new BadRequestException('Payment was refunded');
+    }
+    if (payment.productType !== 'PACKAGE') {
+      throw new BadRequestException('Only package payments can be activated');
+    }
+
+    const pkg = await this.prisma.package.findUnique({
+      where: { id: payment.referenceId },
+    });
+    if (!pkg) throw new NotFoundException('Package no longer exists');
+
+    const student = await this.prisma.studentProfile.findUnique({
+      where: { userId: payment.userId },
+    });
+    if (!student) throw new BadRequestException('Student profile not found');
+
+    return this.prisma.$transaction(async (tx) => {
+      const last = await tx.minuteLedgerEntry.findFirst({
+        where: { studentId: student.id },
+        orderBy: { createdAt: 'desc' },
+      });
+      const currentBalance = last?.balanceAfter ?? 0;
+      const secondsToAdd = pkg.minutes * 60;
+
+      await tx.minuteLedgerEntry.create({
+        data: {
+          studentId: student.id,
+          type: 'PACKAGE_PURCHASE',
+          seconds: secondsToAdd,
+          balanceAfter: currentBalance + secondsToAdd,
+          referenceId: payment.id,
+          note: `Manual activation by admin ${adminUserId}`,
+        },
+      });
+
+      await tx.notification.create({
+        data: {
+          userId: payment.userId,
+          type: 'PAYMENT_SUCCESS',
+          title: 'Payment activated',
+          message: `${pkg.minutes} minutes added to your account (manual activation).`,
+          data: { paymentId: payment.id, manual: true },
+        },
+      });
+
+      return tx.payment.update({
+        where: { id: paymentId },
+        data: {
+          status: 'SUCCESS',
+          paidAt: new Date(),
+          chargilyWebhookPayload: {
+            ...(typeof payment.chargilyWebhookPayload === 'object' ? payment.chargilyWebhookPayload : {}),
+            manualActivationBy: adminUserId,
+            manualActivatedAt: new Date().toISOString(),
+          },
+        },
+      });
+    });
+  }
+
+  async adminRefund(paymentId: string, adminUserId: string) {
+    const payment = await this.prisma.payment.findUnique({
+      where: { id: paymentId },
+    });
+    if (!payment) throw new NotFoundException('Payment not found');
+    if (payment.status !== 'SUCCESS') {
+      throw new BadRequestException('Only SUCCESS payments can be refunded');
+    }
+    if (payment.productType !== 'PACKAGE') {
+      throw new BadRequestException('Only package payments can be refunded');
+    }
+
+    const pkg = await this.prisma.package.findUnique({
+      where: { id: payment.referenceId },
+    });
+    if (!pkg) throw new NotFoundException('Package no longer exists');
+
+    const student = await this.prisma.studentProfile.findUnique({
+      where: { userId: payment.userId },
+    });
+    if (!student) throw new BadRequestException('Student profile not found');
+
+    return this.prisma.$transaction(async (tx) => {
+      const last = await tx.minuteLedgerEntry.findFirst({
+        where: { studentId: student.id },
+        orderBy: { createdAt: 'desc' },
+      });
+      const currentBalance = last?.balanceAfter ?? 0;
+      const refundableSeconds = Math.min(pkg.minutes * 60, currentBalance);
+
+      if (refundableSeconds > 0) {
+        await tx.minuteLedgerEntry.create({
+          data: {
+            studentId: student.id,
+            type: 'REFUND',
+            seconds: -refundableSeconds,
+            balanceAfter: currentBalance - refundableSeconds,
+            referenceId: payment.id,
+            note: `Refund by admin ${adminUserId} — ${Math.floor(refundableSeconds / 60)} min deducted`,
+          },
+        });
+      }
+
+      await tx.notification.create({
+        data: {
+          userId: payment.userId,
+          type: 'PAYMENT_SUCCESS',
+          title: 'Payment refunded',
+          message: `Your payment has been refunded. ${Math.floor(refundableSeconds / 60)} minutes deducted from your balance.`,
+          data: { paymentId: payment.id, refundedSeconds: refundableSeconds },
+        },
+      });
+
+      return tx.payment.update({
+        where: { id: paymentId },
+        data: {
+          status: 'REFUNDED',
+          chargilyWebhookPayload: {
+            ...(typeof payment.chargilyWebhookPayload === 'object' ? payment.chargilyWebhookPayload : {}),
+            refundedBy: adminUserId,
+            refundedAt: new Date().toISOString(),
+            refundedSeconds: refundableSeconds,
+          },
+        },
+      });
     });
   }
 }
