@@ -3,16 +3,11 @@ import { AuthGuard } from '@nestjs/passport';
 import { AdminService } from './admin.service.js';
 import { RolesGuard } from '../auth/roles.guard.js';
 import { Roles } from '../auth/roles.decorator.js';
-<<<<<<< HEAD
 import { FileInterceptor } from '@nestjs/platform-express';
 import { diskStorage } from 'multer';
 import { extname, join } from 'path';
 import { randomUUID } from 'crypto';
-
-
-=======
 import { AdminAuditService } from '../admin-audit/admin-audit.service.js';
->>>>>>> main
 
 @Controller('admin')
 @UseGuards(AuthGuard('jwt'), RolesGuard)
@@ -72,14 +67,14 @@ export class AdminController {
     return this.adminService.listTeachers({ search, status });
   }
 
-    @Patch('teachers/:id/suspend')
+  @Patch('teachers/:id/suspend')
   async suspendTeacher(@Param('id') id: string, @Req() req: any) {
     const result = await this.adminService.suspendTeacher(id, req.user.userId);
     await this.audit.logFromRequest(req, 'SUSPEND_TEACHER', 'TeacherProfile', id);
     return result;
   }
 
-   @Patch('teachers/:id/reactivate')
+  @Patch('teachers/:id/reactivate')
   async reactivateTeacher(@Param('id') id: string, @Req() req: any) {
     const result = await this.adminService.reactivateTeacher(id, req.user.userId);
     await this.audit.logFromRequest(req, 'REACTIVATE_TEACHER', 'TeacherProfile', id);
@@ -92,7 +87,7 @@ export class AdminController {
     return this.adminService.listTeacherRates();
   }
 
-    @Patch('teacher-rates/:id')
+  @Patch('teacher-rates/:id')
   async setTeacherRate(
     @Param('id') id: string,
     @Body() body: { internalHourlyRateDA: number | null },
@@ -160,6 +155,7 @@ export class AdminController {
   getPendingStudents() {
     return this.adminService.getPendingStudents();
   }
+  
   @Patch('users/:id/tier')
   async updateUserTier(
     @Param('id') id: string,
@@ -179,7 +175,7 @@ export class AdminController {
     return this.adminService.updateUserPaymentStatus(id, body.paymentStatus);
   }
 
-    @Post('users/bulk-activate')
+  @Post('users/bulk-activate')
   async bulkActivatePending(@Req() req: any) {
     const result = await this.adminService.bulkActivatePending();
     await this.audit.logFromRequest(req, 'BULK_ACTIVATE_USERS', 'User', null, {
@@ -187,6 +183,7 @@ export class AdminController {
     });
     return result;
   }
+  
   @Patch('users/:id/toggle-active')
   async toggleUserActive(@Param('id') id: string, @Req() req: any) {
     const result = await this.adminService.toggleUserActive(id);
@@ -217,7 +214,7 @@ export class AdminController {
     return this.adminService.deleteActivity(id);
   }
 
-    // ---------- File Upload (Podcasts: video/audio/cover) ----------
+  // ---------- File Upload (Podcasts: video/audio/cover) ----------
   @Post('upload')
   @UseInterceptors(
     FileInterceptor('file', {

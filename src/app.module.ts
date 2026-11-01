@@ -1,12 +1,8 @@
 import { Module } from '@nestjs/common';
-<<<<<<< HEAD
-import { ChatModule } from './chat/chat.module.js';
-=======
 import { APP_FILTER } from '@nestjs/core';
 import { SentryGlobalFilter } from '@sentry/nestjs/setup';
+import { ChatModule } from './chat/chat.module.js';
 import { AdminAuditModule } from './admin-audit/admin-audit.module.js';
-
->>>>>>> main
 import { AppController } from './app.controller.js';
 import { AppService } from './app.service.js';
 import { ReferralsModule } from './referrals/referrals.module.js';
@@ -56,17 +52,13 @@ import { TeacherPaymentsModule } from './teacher-payments/teacher-payments.modul
     LanguagesModule,
     ReferralsModule,
     PaymentsModule,
-<<<<<<< HEAD
     ChatModule,
-=======
     TeacherPaymentsModule,
->>>>>>> main
   ],
   controllers: [AppController],
   providers: [
-     AppService,
+    AppService,
     { provide: APP_FILTER, useClass: SentryGlobalFilter },
   ],
-
 })
 export class AppModule {}
