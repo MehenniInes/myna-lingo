@@ -85,10 +85,10 @@ model Payment {
   user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   productType    PaymentProduct
-  referenceId    String // Package.id or Podcast.id
-  referenceLabel String? // snapshot: "60 minutes package"
+  referenceId    String
+  referenceLabel String?
 
-  amountDA Int // in DZD (Chargily wants integer)
+  amountDA Int
   currency String @default("dzd")
 
   status CheckoutStatus @default(PENDING)
@@ -96,7 +96,12 @@ model Payment {
   // Chargily metadata
   chargilyCheckoutId     String? @unique
   chargilyCheckoutUrl    String?
-  chargilyWebhookPayload Json? // raw webhook body for audit
+  chargilyWebhookPayload Json?
+
+  // 👈 SlickPay metadata (هنا زدنا الحوايج الجديدة)
+  slickpayInvoiceId      String? @unique
+  slickpayCheckoutUrl    String?
+  slickpayWebhookPayload Json?
 
   // Audit
   paidAt    DateTime?
@@ -105,6 +110,7 @@ model Payment {
 
   @@index([userId, status])
   @@index([chargilyCheckoutId])
+  @@index([slickpayInvoiceId])
 }
 
 model WebhookLog {

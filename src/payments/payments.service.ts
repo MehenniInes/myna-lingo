@@ -1,6 +1,8 @@
 import {
-  Injectable, BadRequestException, NotFoundException, Logger,ForbiddenException,} from '@nestjs/common';
+  Injectable, BadRequestException, NotFoundException, Logger, ForbiddenException,
+} from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service.js';
+import { SlickPayService } from './slickpay.service.js';
 import { createHmac, timingSafeEqual } from 'crypto';
 
 @Injectable()
@@ -9,7 +11,10 @@ export class PaymentsService {
   private readonly isMock =
     (process.env.PAYMENT_MOCK ?? 'true').toLowerCase() === 'true';
 
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private readonly slickPayService: SlickPayService,
+  ) {}
 
   // ---------- CREATE CHECKOUT ----------
 
@@ -20,6 +25,11 @@ export class PaymentsService {
     if (!pkg || !pkg.isActive) {
       throw new NotFoundException('Package not found or inactive');
     }
+
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+    });
+    if (!user) throw new NotFoundException('User not found');
 
     const payment = await this.prisma.payment.create({
       data: {
@@ -32,80 +42,60 @@ export class PaymentsService {
       },
     });
 
-    // MOCK MODE — return a fake checkout URL. Do not call Chargily.
-    if (this.isMock) {
-      this.logger.warn(
-        `[MOCK] Checkout created for payment ${payment.id} — no Chargily call made.`,
-      );
-      const fakeUrl = `${process.env.FRONTEND_URL || 'http://localhost:3000'}/payment/mock?paymentId=${payment.id}`;
-      await this.prisma.payment.update({
-        where: { id: payment.id },
-        data: {
-          chargilyCheckoutId: `mock_${payment.id}`,
-          chargilyCheckoutUrl: fakeUrl,
+       const [firstName, ...rest] = (user.fullName || 'Myna User').split(' ');
+    const lastName = rest.join(' ') || 'User';
+
+    const invoiceResponse = await this.slickPayService.createInvoice({
+      amount: pkg.priceDA,
+      firstName,
+      lastName,
+      email: user.email,
+      phone: user.phone ?? undefined,
+      address: 'Algeria',
+      url: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/payment/success`,
+      items: [
+        {
+          name: `${pkg.minutes} minutes package`,
+          price: pkg.priceDA,
+          quantity: 1,
         },
-      });
-      return {
-        paymentId: payment.id,
-        checkoutUrl: fakeUrl,
-        amountDA: pkg.priceDA,
-        mock: true,
-      };
-    }
-
-    // REAL MODE — call Chargily
-    const apiUrl = process.env.CHARGILY_API_URL;
-    const apiKey = process.env.CHARGILY_API_KEY;
-    if (!apiUrl || !apiKey) {
-      throw new BadRequestException('Chargily credentials are not configured');
-    }
-
-    const webhookUrl = `${process.env.BACKEND_URL || 'http://localhost:4000'}/payments/webhook/chargily`;
-
-    const response = await fetch(`${apiUrl}/checkouts`, {
-      method: 'POST',
-      headers: {
-        Authorization: `Bearer ${apiKey}`,
-        'Content-Type': 'application/json',
-      },
-      body: JSON.stringify({
-        amount: pkg.priceDA,
-        currency: 'dzd',
-        payment_method: 'edahabia', // or 'cib' / 'chargily_app'
-        success_url: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/payment/success`,
-        failure_url: `${process.env.FRONTEND_URL || 'http://localhost:3000'}/payment/failure`,
-        webhook_endpoint: webhookUrl,
-        description: `Myna Lingo — ${pkg.minutes} minutes package`,
-        locale: 'ar',
-        metadata: [{ paymentId: payment.id }],
-      }),
+      ],
     });
 
-    const data = await response.json();
-    if (!response.ok) {
-      this.logger.error('Chargily checkout failed', data);
-      await this.prisma.payment.update({
-        where: { id: payment.id },
-        data: { status: 'FAILED' },
-      });
-      throw new BadRequestException(
-        data?.message || 'Could not create checkout session',
-      );
+    // 👈 نطبعو الاستجابة كاملة فـ Terminal تاع الباكند باش نشوفوها
+    this.logger.log(`SlickPay Full Response: ${JSON.stringify(invoiceResponse)}`);
+
+    // 👈 نقلبو على الرابط والـ ID فـ كل الاحتمالات
+    const checkoutUrl = 
+      invoiceResponse.url || 
+      invoiceResponse.data?.url || 
+      invoiceResponse.invoice?.url || 
+      invoiceResponse.data?.invoice?.url;
+
+    const invoiceId = 
+      invoiceResponse.id || 
+      invoiceResponse.data?.id || 
+      invoiceResponse.invoice?.id || 
+      invoiceResponse.data?.invoice?.id || 
+      `slick_${Date.now()}`;
+
+    if (!checkoutUrl) {
+      throw new BadRequestException('SlickPay did not return a checkout URL.');
     }
 
     await this.prisma.payment.update({
       where: { id: payment.id },
       data: {
-        chargilyCheckoutId: data.id,
-        chargilyCheckoutUrl: data.checkout_url,
-      },
+        slickpayInvoiceId: String(invoiceId),
+        slickpayCheckoutUrl: checkoutUrl,
+      } as any,
     });
 
     return {
       paymentId: payment.id,
-      checkoutUrl: data.checkout_url,
+      checkoutUrl: checkoutUrl,
       amountDA: pkg.priceDA,
-      mock: false,
+      provider: 'slickpay',
     };
   }
 
@@ -127,7 +117,6 @@ export class PaymentsService {
   // ---------- WEBHOOK HANDLER ----------
 
   async handleChargilyWebhook(rawBody: Buffer, signature: string) {
-    // Log every incoming webhook — even bad signatures — for the audit trail.
     let parsedEventType: string | null = null;
     try {
       const parsed = JSON.parse(rawBody.toString('utf8'));
@@ -147,8 +136,6 @@ export class PaymentsService {
       this.logger.warn(`WebhookLog write failed: ${logErr.message}`);
     }
 
-    // ...existing signature verification continues below...
-    
     if (!this.verifyChargilySignature(rawBody, signature)) {
       this.logger.warn('Rejected webhook — invalid signature');
       throw new BadRequestException('Invalid signature');
@@ -157,7 +144,6 @@ export class PaymentsService {
     const event = JSON.parse(rawBody.toString('utf8'));
     this.logger.log(`Received Chargily event: ${event.type}`);
 
-    // Only care about paid checkouts
     if (event.type !== 'checkout.paid') {
       return { received: true, ignored: event.type };
     }
@@ -177,12 +163,10 @@ export class PaymentsService {
       return { received: true, ignored: 'payment_not_found' };
     }
 
-    // Idempotency — if already successful, do nothing
     if (payment.status === 'SUCCESS') {
       return { received: true, ignored: 'already_processed' };
     }
 
-    // Mark success + add minutes
     await this.prisma.$transaction(async (tx) => {
       await tx.payment.update({
         where: { id: payment.id },
@@ -219,7 +203,6 @@ export class PaymentsService {
             },
           });
 
-          // Fire a notification (uses the Notifications table)
           await tx.notification.create({
             data: {
               userId: payment.userId,
@@ -248,7 +231,6 @@ export class PaymentsService {
     });
     if (!payment) throw new NotFoundException('Payment not found');
 
-    // Build a fake event payload exactly like Chargily would
     const fakeEvent = {
       type: 'checkout.paid',
       data: {
@@ -274,7 +256,8 @@ export class PaymentsService {
       take: 50,
     });
   }
-    async getPaymentStatus(userId: string, paymentId: string) {
+
+  async getPaymentStatus(userId: string, paymentId: string) {
     const payment = await this.prisma.payment.findUnique({
       where: { id: paymentId },
       select: {
@@ -296,7 +279,8 @@ export class PaymentsService {
     }
     return payment;
   }
-    // ---------- Admin overrides ----------
+
+  // ---------- Admin overrides ----------
 
   async adminListPayments(status?: string) {
     const where: any = {};
@@ -447,5 +431,86 @@ export class PaymentsService {
         },
       });
     });
+  }
+
+  // ---------- SlickPay Webhook ----------
+  async handleSlickPayWebhook(event: any) {
+    this.logger.log(`SlickPay webhook received: ${JSON.stringify(event)}`);
+
+    const invoiceId = String(event?.invoice?.id ?? event?.id ?? '');
+    if (!invoiceId) {
+      this.logger.warn('SlickPay webhook without invoice id');
+      return { received: true, ignored: 'no_invoice_id' };
+    }
+
+    const payment = await this.prisma.payment.findFirst({
+      where: { slickpayInvoiceId: invoiceId } as any,
+    });
+    if (!payment) {
+      this.logger.warn(`Payment not found for SlickPay invoice ${invoiceId}`);
+      return { received: true, ignored: 'payment_not_found' };
+    }
+
+    if (payment.status === 'SUCCESS') {
+      return { received: true, ignored: 'already_processed' };
+    }
+
+    const isPaid = event?.invoice?.status === 'paid' || event?.status === 'paid';
+    if (!isPaid) {
+      this.logger.log(`SlickPay invoice ${invoiceId} not paid yet: ${event?.invoice?.status}`);
+      return { received: true, ignored: 'not_paid' };
+    }
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.payment.update({
+        where: { id: payment.id },
+        data: {
+          status: 'SUCCESS',
+          paidAt: new Date(),
+          slickpayWebhookPayload: event,
+        },
+      });
+
+      if (payment.productType === 'PACKAGE') {
+        const pkg = await tx.package.findUnique({
+          where: { id: payment.referenceId },
+        });
+        const student = await tx.studentProfile.findUnique({
+          where: { userId: payment.userId },
+        });
+        if (pkg && student) {
+          const lastEntry = await tx.minuteLedgerEntry.findFirst({
+            where: { studentId: student.id },
+            orderBy: { createdAt: 'desc' },
+          });
+          const currentBalance = lastEntry?.balanceAfter ?? 0;
+          const secondsToAdd = pkg.minutes * 60;
+
+          await tx.minuteLedgerEntry.create({
+            data: {
+              studentId: student.id,
+              type: 'PACKAGE_PURCHASE',
+              seconds: secondsToAdd,
+              balanceAfter: currentBalance + secondsToAdd,
+              referenceId: payment.id,
+              note: `SlickPay payment ${payment.id} — ${pkg.minutes} min`,
+            },
+          });
+
+          await tx.notification.create({
+            data: {
+              userId: payment.userId,
+              type: 'PAYMENT_SUCCESS',
+              title: 'Payment successful',
+              message: `You added ${pkg.minutes} minutes to your account.`,
+              data: { paymentId: payment.id },
+            },
+          });
+        }
+      }
+    });
+
+    this.logger.log(`SlickPay payment ${payment.id} completed — minutes added.`);
+    return { received: true };
   }
 }

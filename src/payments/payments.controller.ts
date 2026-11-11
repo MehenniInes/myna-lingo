@@ -1,5 +1,6 @@
 import {
-  Controller, Post, Get, Req, Body, UseGuards,Param,Query,BadRequestException, Headers,} from '@nestjs/common';
+  Controller, Post, Get, Req, Body, UseGuards, Param, Query, BadRequestException, Headers,
+} from '@nestjs/common';
 import { AuthGuard } from '@nestjs/passport';
 import { PaymentsService } from './payments.service.js';
 import { CreatePackageCheckoutDto } from './dto/create-checkout.dto.js';
@@ -24,19 +25,23 @@ export class PaymentsController {
     return this.paymentsService.listMyPayments(req.user.userId);
   }
 
-  // ---------- WEBHOOK (called by Chargily, no JWT) ----------
+  // ---------- WEBHOOKS ----------
 
   @Post('webhook/chargily')
   async chargilyWebhook(
     @Req() req: any,
     @Headers('signature') signature: string,
   ) {
-    // rawBody is populated because we passed rawBody: true in main.ts
     const rawBody: Buffer = req.rawBody;
     if (!rawBody) {
       throw new BadRequestException('Raw body missing — check main.ts');
     }
     return this.paymentsService.handleChargilyWebhook(rawBody, signature);
+  }
+
+  @Post('webhook/slickpay')
+  async slickpayWebhook(@Body() body: any) {
+    return this.paymentsService.handleSlickPayWebhook(body);
   }
 
   // ---------- MOCK (dev only) ----------
@@ -45,7 +50,8 @@ export class PaymentsController {
   async mockComplete(@Body() body: { paymentId: string }) {
     return this.paymentsService.simulateMockPayment(body.paymentId);
   }
-    // ---------- Admin overrides ----------
+
+  // ---------- Admin overrides ----------
 
   @Get('admin/all')
   @UseGuards(AuthGuard('jwt'), RolesGuard)
@@ -67,7 +73,8 @@ export class PaymentsController {
   adminRefund(@Req() req: any, @Param('id') id: string) {
     return this.paymentsService.adminRefund(id, req.user.userId);
   }
-    @Get(':id/status')
+
+  @Get(':id/status')
   @UseGuards(AuthGuard('jwt'))
   async getStatus(@Req() req: any, @Param('id') id: string) {
     return this.paymentsService.getPaymentStatus(req.user.userId, id);
