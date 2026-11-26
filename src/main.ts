@@ -23,8 +23,7 @@ async function bootstrap() {
     origin: [
       'http://localhost:3000',
       'http://localhost:4000',
-      // ⚠️ Add your Vercel URL here after deploying frontend:
-      // 'https://myna-lingo.vercel.app',
+      'https://myna-lingo-web.vercel.app',
     ],
     credentials: true,
   });
