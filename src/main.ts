@@ -23,6 +23,7 @@ async function bootstrap() {
     origin: [
       'http://localhost:3000',
       'http://localhost:4000',
+      'https://myna-lingo-p6v917pvh-happy-9d33.vercel.app',
       'https://myna-lingo-web.vercel.app',
     ],
     credentials: true,
