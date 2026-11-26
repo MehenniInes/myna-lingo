@@ -218,7 +218,24 @@ model User {
   roomPresence     RoomPresence[]
   payments         Payment[]
 
+  passwordResetTokens PasswordResetToken[] // NEW
+
   @@index([role])
+}
+
+// NEW: one row per issued reset token. The raw token is never stored — only its SHA-256 hash.
+model PasswordResetToken {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
+  @@index([expiresAt])
 }
 
 model ParentProfile {
